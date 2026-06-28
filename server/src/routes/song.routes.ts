@@ -2,8 +2,8 @@ import { Router } from "express";
 import {
     getAllSongs,
     getSongByID,
-    // searchSongs,
-    // createSong,
+    searchSongs,
+    addSong,
     // updateSong,
     // deleteSong,
 } from "../handlers/song.js";
@@ -12,9 +12,9 @@ import { asyncHandler } from "../utils/AsyncHandler.js";
 const router = Router();
 
 router.get("/", asyncHandler(getAllSongs));
+router.get("/search", asyncHandler(searchSongs));
 router.get("/:id", asyncHandler(getSongByID));
-// router.get("/search", searchSongs);
-// router.post("/", createSong);
+router.post("/", asyncHandler(addSong));
 // router.patch("/:id", updateSong);
 // router.delete("/:id", deleteSong);
 
