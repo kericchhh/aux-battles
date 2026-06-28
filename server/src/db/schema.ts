@@ -16,6 +16,15 @@ export const usersTable = pgTable("users", {
     updatedAt: timestamp("updated_at").defaultNow().notNull().$onUpdate(() => new Date())
 });
 
+export const refreshTokens = pgTable("refresh_tokens", {
+    token: varchar("token").primaryKey(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
+    userId: uuid("user_id").references(() => usersTable.id, {onDelete: "cascade"}).notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    revokedAt: timestamp("revoked_at")
+})
+
 export const songsTable = pgTable("songs", {
     id: uuid("id").primaryKey().defaultRandom(),
     title: varchar("title",{length:255}).notNull(),
@@ -29,3 +38,4 @@ export const songsTable = pgTable("songs", {
         .default("PROCESSING")
         .notNull()
 })
+

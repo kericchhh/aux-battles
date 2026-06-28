@@ -17,3 +17,5 @@ export const songCreateSchema = z.object({
     duration: z.number(),
     status: z.enum(["PROCESSING", "READY", "FAILED"]).default("PROCESSING")
 })
+
+export const songPatchSchema = songCreateSchema.partial()
