@@ -1,11 +1,11 @@
 import { Router } from "express";
 import { asyncHandler } from "../utils/AsyncHandler.js";
 import { requireAuth } from "../middleware/authMiddleware.js";
-import { createLobby } from "../handlers/battles.js";
+import { createLobby, joinLobby } from "../handlers/battles.js";
 
 const router = Router();
 
 router.post("/", requireAuth, asyncHandler(createLobby))
-
+router.post("/join", requireAuth, asyncHandler(joinLobby))
 
 export default router
