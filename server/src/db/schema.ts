@@ -48,7 +48,10 @@ export const battlesTable = pgTable("battles", {
     status: battleStatus().default("PENDING").notNull(),
     winnerId: uuid("winner_id").references(() => usersTable.id),
     rounds: integer("rounds").default(5).notNull(),
+    currentRound: integer("current_round").default(1).notNull(),
     inviteCode: varchar("invite_code", {length: 6}).notNull().unique(),
+    hostSongId: uuid("host_song_id").references(() => songsTable.id),
+    guestSongId: uuid("guest_song_id").references(() => songsTable.id),
     createdAt: timestamp("creted_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull().$onUpdate(() => new Date())
 })

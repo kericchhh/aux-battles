@@ -7,3 +7,7 @@ export const createLobbySchema = z.object({
 export const joinLobbySchema = z.object({
     inviteCode: z.string().length(6)
 })
+
+export const pickSongSchema = z.object({
+    songId: z.string().uuid()
+})
