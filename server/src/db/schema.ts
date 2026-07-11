@@ -48,6 +48,7 @@ export const battlesTable = pgTable("battles", {
     status: battleStatus().default("PENDING").notNull(),
     winnerId: uuid("winner_id").references(() => usersTable.id),
     rounds: integer("rounds").default(5).notNull(),
+    inviteCode: varchar("invite_code", {length: 6}).notNull().unique(),
     createdAt: timestamp("creted_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull().$onUpdate(() => new Date())
 })
@@ -66,7 +67,7 @@ export const roundsTable = pgTable("rounds", {
         .notNull(),
     hostPoints: integer("host_points").default(0).notNull(),
     guestPoints: integer("guest_points").default(0).notNull(),
-    status: roundStatus()
+    status: roundStatus().default("SONG_PICKS").notNull()
 })
 
 export const guessesTable = pgTable("guesses", {
