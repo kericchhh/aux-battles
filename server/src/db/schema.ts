@@ -25,7 +25,7 @@ export const refreshTokens = pgTable("refresh_tokens", {
     revokedAt: timestamp("revoked_at")
 })
 
-export const songStatus = pgEnum("song_status", ["PROCESSING", "ONGOING", "FINISHED"])
+export const songStatus = pgEnum("song_status", ["PROCESSING", "READY", "FAILED"])
 export const battleStatus = pgEnum("battle_status", ["PENDING", "ONGOING", "FINISHED"])
 export const roundStatus = pgEnum("round_status", ["SONG_PICKS", "GUESSING", "FINISHED"]) 
 export const roundStage = pgEnum("round_stage", ["DRUM", "BASS", "MELODY", "FULL"])
@@ -38,7 +38,12 @@ export const songsTable = pgTable("songs", {
     coverImage: varchar("cover_image"),
     album: varchar("album", { length: 255 }),
     duration: integer("duration").notNull(),
-    status: songStatus().default("PROCESSING").notNull() 
+    status: songStatus().default("PROCESSING").notNull(),
+    fullSongPath: varchar("full_song_path", {length: 255}),
+    drumsPath: varchar("drums_path", {length: 255}),
+    bassPath: varchar("bass_path", {length: 255}),
+    melodyPath: varchar("melody_path", {length: 255}),
+    vocalsPath: varchar("vocals_path", {length: 255})
 })
 
 export const battlesTable = pgTable("battles", {

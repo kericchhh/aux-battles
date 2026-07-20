@@ -28,8 +28,12 @@ export async function searchSongs(req: Request, res: Response) {
 }
 
 export async function addSong(req: Request, res: Response) {
+    if(!req.file){
+        throw new AppError("Song file is required", 400)
+    }
     const result = songCreateSchema.safeParse(req.body)
     if(!result.success) throw new AppError("Invalid fields", 400)
+
     const toAdd = await addSongQuery(result.data)
     if(!toAdd) throw new AppError("Could not create song, try again", 404)
     res.json(toAdd)

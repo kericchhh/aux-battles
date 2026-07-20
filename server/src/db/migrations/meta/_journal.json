@@ -5,43 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1782482359534,
-      "tag": "0000_warm_puck",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1782483288977,
-      "tag": "0001_steady_praxagora",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1782649899926,
-      "tag": "0002_glamorous_thanos",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1782649942482,
-      "tag": "0003_overrated_ezekiel_stane",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1783780975891,
-      "tag": "0004_amused_skreet",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1783792138995,
-      "tag": "0005_cuddly_fat_cobra",
+      "when": 1784564236084,
+      "tag": "0000_flat_leopardon",
       "breakpoints": true
     }
   ]
