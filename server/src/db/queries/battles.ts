@@ -1,8 +1,9 @@
 import { eq } from "drizzle-orm";
 import { db } from "../index.js";
-import { battlesTable } from "../schema.js";
+import { battlesTable, roundsTable } from "../schema.js";
 import { customAlphabet } from "nanoid";
 import { getRoundByBattleId } from "./rounds.js";
+import { AppError } from "../../utils/AppError.js";
 
 const generateInviteCode = customAlphabet(
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
@@ -63,4 +64,32 @@ export async function advanceOrFinishBattle(battleId: string){
 
     const [advance] = await db.update(battlesTable).set({ currentRound: battle.currentRound + 1, hostSongId: null, guestSongId: null}).where(eq(battlesTable.id, battleId)).returning()
     return advance
+}
+
+export async function pickSongTransaction(battleId: string, userId: string, songId: string) {
+    return db.transaction(async (tx) => {
+        const [battle] = await tx.select().from(battlesTable).where(eq(battlesTable.id, battleId))
+        if(!battle) throw new AppError("Battle is not currently active", 400)
+
+        const isHost = battle.hostId === userId
+        const isGuest = battle.guestId === userId
+        if(!isHost && !isGuest) throw new AppError("You are not a participant of this battle", 403)
+        if((isHost && battle.hostSongId) || (isGuest && battle.guestSongId)) throw new AppError("You already picked a song", 400)
+
+        const field = isHost ? "hostSongId" : "guestSongId"
+        const [updatedBattle] = await tx.update(battlesTable).set( { [field] : songId}).where(eq(battlesTable.id, battleId)).returning()
+        if(updatedBattle?.hostSongId && updatedBattle.guestSongId){
+            const [round] = await tx.insert(roundsTable).values({
+                battleId,
+                hostSongId: updatedBattle.hostSongId,
+                guestSongId: updatedBattle.guestSongId,
+                roundNumber: battle.currentRound,
+                status: "GUESSING"
+            }).returning()
+
+            await tx.update(battlesTable).set({hostSongId: null, guestSongId: null}).where(eq(battlesTable.id, battleId))
+            return {status: "ROUND_STARTED" as const, round}
+        }
+        return {status: "WAITING_ON_OPPONENT" as const}
+    })
 }
