@@ -12,6 +12,11 @@ export async function getRoundById(roundId: string) {
     return res
 }
 
+export async function getRoundByBattleId(battleId: string) {
+    const res = await db.select().from(roundsTable).where(eq(roundsTable.battleId, battleId))
+    return res
+}
+
 export async function getGuessCount(roundId: string, userId: string){
     const res = await db.select().from(guessesTable).where(and(eq(guessesTable.roundId, roundId), eq(guessesTable.userId, userId)))
     return res.length
@@ -29,5 +34,19 @@ export async function advanceStage(roundId: string, field: "hostStage" | "guestS
 
 export async function addPoints(roundId: string, field: "hostPoints" | "guestPoints", points: number) {
     const [res] = await db.update(roundsTable).set({ [field]: sql`${roundsTable[field]} + ${points}`}).where(eq(roundsTable.id, roundId)).returning()
+    return res
+}
+
+export async function hasCorrectGuess(roundId: string, userId: string){
+    const [res] = await db.select().from(guessesTable).where(and(
+        eq(guessesTable.roundId, roundId),
+        eq(guessesTable.userId, userId),
+        eq(guessesTable.correct, true)
+    ))
+    return !!res
+}
+
+export async function finishRound(roundId: string){
+    const [res] = await db.update(roundsTable).set({ status: "FINISHED"}).where(eq(roundsTable.id, roundId)).returning()
     return res
 }

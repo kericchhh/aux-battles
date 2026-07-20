@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { db } from "../index.js";
 import { battlesTable } from "../schema.js";
 import { customAlphabet } from "nanoid";
+import { getRoundByBattleId } from "./rounds.js";
 
 const generateInviteCode = customAlphabet(
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
@@ -39,3 +40,27 @@ export async function resetPicks(battleId: string){
     return res
 }
     
+export async function advanceOrFinishBattle(battleId: string){
+    const battle = await getBattleById(battleId)
+    if(!battle) return null
+
+    if(battle.currentRound >= battle.rounds){
+        const allRounds = await getRoundByBattleId(battleId)
+        if(!allRounds) return null
+        const hostTotal = allRounds.reduce((sum: number, r) => sum + r.hostPoints, 0)
+        const guestTotal = allRounds.reduce((sum: number, r) => sum + r.guestPoints, 0)
+
+        let winner: string | null = null
+        if(hostTotal > guestTotal){
+            winner = battle.hostId
+        }else if(hostTotal < guestTotal){
+            winner = battle.guestId
+        }
+
+        const [finished] = await db.update(battlesTable).set({ status: "FINISHED", winnerId: winner}).where(eq(battlesTable.id, battleId)).returning()
+        return finished
+    }
+
+    const [advance] = await db.update(battlesTable).set({ currentRound: battle.currentRound + 1, hostSongId: null, guestSongId: null}).where(eq(battlesTable.id, battleId)).returning()
+    return advance
+}
