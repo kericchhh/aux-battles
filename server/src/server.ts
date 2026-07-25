@@ -1,5 +1,6 @@
 import express from "express";
 import http from "node:http"
+import cors from "cors";
 import songRoutes from "./routes/song.routes.js"
 import userRoutes from "./routes/user.routes.js"
 import battleRoutes from "./routes/battles.routes.js"
@@ -9,6 +10,11 @@ import { initSocket } from "./socket.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+app.use(cors({
+    origin: "http://localhost:5173",
+    credentials: true
+}))
 app.use(express.json())
 app.use("/songs", songRoutes)
 app.use("/users", userRoutes)

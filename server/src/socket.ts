@@ -5,7 +5,10 @@ let io: Server;
 
 export function initSocket(httpServer: HttpServer) {
     io = new Server(httpServer, {
-        cors: {origin: "*"}
+        cors: {
+            origin: "http://localhost:5173",
+            credentials: true
+        }
     });
     io.on("connection", (socket) => {
         console.log("Client connected:", socket.id)
