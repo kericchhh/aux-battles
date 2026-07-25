@@ -1,10 +1,11 @@
 import type { Request, Response } from "express";
 import { AppError } from "../utils/AppError.js";
 import { submitGuessSchema } from "../validation/rounds.js";
-import { addPoints, advanceStage, getGuessCount, getRoundById, hasCorrectGuess, makeGuess } from "../db/queries/rounds.js";
+import { addPoints, advanceStage, getGuessCount, getRoundById, hasCorrectGuess, makeGuess, finishRound } from "../db/queries/rounds.js";
 import { advanceOrFinishBattle, getBattleById } from "../db/queries/battles.js";
 import { getSongById } from "../db/queries/songs.js";
-import { finishRound } from "../db/queries/rounds.js";
+import { isCloseMatch } from "../utils/fuzzyMatch.js";
+import { getIO } from "../socket.js";
 
 const STAGE_ORDER = ["DRUM", "BASS", "MELODY", "FULL"] as const;
 const STAGE_POINTS: Record<string, number> = { DRUM: 100, BASS: 75, MELODY: 50, FULL: 20 }
@@ -44,7 +45,7 @@ export async function submitGuess(req: Request, res: Response) {
     if (!targetSong) {
         throw new AppError("Target not found", 404)
     }
-    const correct = normalize(guess) === normalize(targetSong.title);
+    const correct = isCloseMatch(guess, targetSong.title)
     const attemptNumber = (await getGuessCount(roundId, req.userId)) + 1;
     await makeGuess({ roundId, userId: req.userId, guess, correct, attempt: attemptNumber });
 
@@ -80,10 +81,7 @@ export async function submitGuess(req: Request, res: Response) {
         responsePayload.roundFinished = true
         responsePayload.battleStatus = battleUpdated?.status
     }
+    getIO().to(battle.id).emit("round:update", responsePayload)
 
     res.status(200).json(responsePayload)
-}
-
-function normalize(s: string) {
-    return s.trim().toLowerCase()
 }

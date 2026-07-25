@@ -50,3 +50,4 @@ export async function finishRound(roundId: string){
     const [res] = await db.update(roundsTable).set({ status: "FINISHED"}).where(eq(roundsTable.id, roundId)).returning()
     return res
 }
+    

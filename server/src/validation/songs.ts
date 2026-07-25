@@ -14,7 +14,7 @@ export const songCreateSchema = z.object({
     genre: z.string().max(50),
     coverImage: z.string().optional(),
     album: z.string().max(255).optional(),
-    duration: z.number(),
+    duration: z.coerce.number().int().positive(),
     status: z.enum(["PROCESSING", "READY", "FAILED"]).default("PROCESSING")
 })
 

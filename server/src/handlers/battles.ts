@@ -1,9 +1,9 @@
 import type {Request, Response} from "express"
-import { createBattle, getBattleById, getBattleByInvite, joinBattle, pickSongTransaction, resetPicks, setPendingPick } from "../db/queries/battles.js"
+import { createBattle, getBattleByInvite, joinBattle, pickSongTransaction} from "../db/queries/battles.js"
 import { createLobbySchema, joinLobbySchema, pickSongSchema } from "../validation/battles.js"
 import { AppError } from "../utils/AppError.js";
-import { createRound } from "../db/queries/rounds.js";
 import { getSongById } from "../db/queries/songs.js";
+import { getIO } from "../socket.js";
 
 export async function createLobby(req: Request, res: Response) {
     if(!req.userId){
@@ -51,7 +51,8 @@ export async function pickSong(req: Request, res: Response){
 
     const song = await getSongById(songId)
     if(!song) throw new AppError("Song not found", 404)
-    if(song.status !== "FINISHED") throw new AppError("Song is not available yet", 400)
+    if(song.status !== "READY") throw new AppError("Song is not available yet", 400)
     const result = await pickSongTransaction(battleId, req.userId, songId)
+    getIO().to(battleId).emit("battle:update", result)
     res.status(result.status === "ROUND_STARTED" ? 201 : 200).json(result)
 }
