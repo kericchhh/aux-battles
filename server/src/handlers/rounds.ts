@@ -36,6 +36,12 @@ export async function submitGuess(req: Request, res: Response) {
     const isGuest = battle.guestId === req.userId
     if (!isHost && !isGuest) throw new AppError("You do not participate in this battle", 403)
 
+    const previousGuessCount = await getGuessCount(roundId, req.userId)
+    const alreadyCorrect = await hasCorrectGuess(roundId, req.userId)
+    if(alreadyCorrect || previousGuessCount >= STAGE_ORDER.length){
+        throw new AppError("You have already finished guessing this round", 400)
+    }
+
     const targetSongId = isHost ? round.guestSongId : round.hostSongId;
     const stageField = isHost ? "hostStage" : "guestStage";
     const pointsField = isHost ? "hostPoints" : "guestPoints";
@@ -46,7 +52,7 @@ export async function submitGuess(req: Request, res: Response) {
         throw new AppError("Target not found", 404)
     }
     const correct = isCloseMatch(guess, targetSong.title)
-    const attemptNumber = (await getGuessCount(roundId, req.userId)) + 1;
+    const attemptNumber = previousGuessCount + 1;
     await makeGuess({ roundId, userId: req.userId, guess, correct, attempt: attemptNumber });
 
     let responsePayload: Record<string, unknown>

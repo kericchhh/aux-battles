@@ -1,9 +1,33 @@
 import type {Request, Response} from "express"
-import { createBattle, getBattleByInvite, joinBattle, pickSongTransaction} from "../db/queries/battles.js"
-import { createLobbySchema, joinLobbySchema, pickSongSchema } from "../validation/battles.js"
+import { createBattle, getBattleByInvite, joinBattle, pickSongTransaction, getBattleById} from "../db/queries/battles.js"
+import { createLobbySchema, joinLobbySchema, pickSongSchema, battleIdSchema } from "../validation/battles.js"
 import { AppError } from "../utils/AppError.js";
 import { getSongById } from "../db/queries/songs.js";
 import { getIO } from "../socket.js";
+import { getRoundByBattleId, getRoundById } from "../db/queries/rounds.js";
+
+export async function getLobby(req: Request, res: Response) {
+    if(!req.userId){
+        throw new AppError("Unauthorized", 401)
+    }
+    const parsedParams = battleIdSchema.safeParse(req.params)
+    if(!parsedParams.success){
+        throw new AppError("Invalid battle id", 400)
+    }
+    const {battleId} = parsedParams.data
+    const battle = await getBattleById(battleId)
+    if(!battle){
+        throw new AppError("Battle not found", 404)
+    }
+    const isParticipant = battle.hostId === req.userId || battle.guestId === req.userId
+    if(!isParticipant) {
+        throw new AppError("You are not a participant of this battle", 403)
+    }
+
+    const rounds = await getRoundById(battleId)
+    const round = rounds.find((item) => item.roundNumber === battle.currentRound) ?? null
+    res.status(200).json({battle, round})
+}
 
 export async function createLobby(req: Request, res: Response) {
     if(!req.userId){

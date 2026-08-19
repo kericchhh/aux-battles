@@ -11,3 +11,7 @@ export const joinLobbySchema = z.object({
 export const pickSongSchema = z.object({
     songId: z.string().uuid()
 })
+
+export const battleIdSchema = z.object({
+    battleId: z.string().uuid()
+})
