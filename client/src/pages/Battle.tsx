@@ -41,5 +41,58 @@ export default function Battle() {
         }
     }, [battleId])
 
-    useEffect()
+    useEffect(() => {
+        if (!socket) return 
+        const refreshBattle = () => {
+            void loadBattle()
+        }
+        socket.on("battle:update", refreshBattle)
+        socket.on("round:update", refreshBattle)
+        return () => {
+            socket.off("battle:update", refreshBattle)
+            socket.off("round:upate", refreshBattle)
+        }
+    }, [loadBattle, socket])
+
+    const copyInviteCode = async () => {
+        const code = battleState?.battle.inviteCode
+        if (!code) return
+        try {
+            await navigator.clipboard.writeText(code)
+            setCopied(true)
+            window.setTimeout(() => setCopied(false), 1500)
+        } catch {
+            setError("Could not copy code")
+        }
+    }
+
+    if (isLoading) {
+        return (
+            <main className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_35%_35%,#29345f_0%,#171b32_35%,#0d1020_100%)] text-[#f4f0f7]">
+                <p className="w-full max-w-md space-y-5 text-center">Loading battle...</p>
+            </main>
+        )
+    }
+
+    if (!battleState) {
+        return (
+            <main className="flex h-full items-center justify-center bg-[#0d1020] px-6 text-[#f4f0f7]">
+                <div className="w-full max-w-md space-y-5 text-center">
+                    <ErrorBanner message={error || "Battle not found"} />
+                    <Link to="/" className="inline-block rounded-xl bg-[#5964a6] px-6 py-3 transition-colors hover:bg-[#959cc6] hover:text-black">Return to lobby</Link>
+                </div>
+            </main>
+        )
+    }
+
+    const {battle, round} = battleState
+    const isHost = battle.hostId === userId;
+    const waitingForOpponent = battle.status === "PENDING" && !battle.guest.id
+
+    return(
+        <main>
+            <div>
+            </div>
+        </main>
+    )
 }
