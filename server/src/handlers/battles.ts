@@ -6,6 +6,22 @@ import { getSongById } from "../db/queries/songs.js";
 import { getIO } from "../socket.js";
 import { getRoundByBattleId, getRoundById } from "../db/queries/rounds.js";
 
+export async function getBattleByIdHandler(req: Request, res: Response) {
+    if(!req.userId){
+        throw new AppError("Unauthorized",401)
+    }
+    const parsedParams = battleIdSchema.safeParse(req.params)
+    if(!parsedParams.success){
+        throw new AppError("Invalid battle id", 404)
+    }
+    const {battleId} = parsedParams.data
+    const result = await getBattleById(battleId)
+    if(!result){
+        throw new AppError("Battle not found", 404)
+    }
+    res.status(200).json({result})
+}
+
 export async function getLobby(req: Request, res: Response) {
     if(!req.userId){
         throw new AppError("Unauthorized", 401)
@@ -24,7 +40,7 @@ export async function getLobby(req: Request, res: Response) {
         throw new AppError("You are not a participant of this battle", 403)
     }
 
-    const rounds = await getRoundById(battleId)
+    const rounds = await getRoundByBattleId(battleId)
     const round = rounds.find((item) => item.roundNumber === battle.currentRound) ?? null
     res.status(200).json({battle, round})
 }

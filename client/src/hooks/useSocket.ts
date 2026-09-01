@@ -1,23 +1,25 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 
 export function useSocket(battleId: string | undefined) {
-  const socketRef = useRef<Socket | null>(null);
+  const [socket, setSocket] = useState<Socket | null>(null);
 
   useEffect(() => {
     if (!battleId) return;
 
-    const socket = io("http://localhost:5000");
-    socketRef.current = socket;
+    const s = io("http://localhost:5000");
 
-    socket.on("connect", () => {
-      socket.emit("battle:join", battleId);
+    s.on("connect", () => {
+      s.emit("battle:join", battleId);
     });
 
+    setSocket(s);
+
     return () => {
-      socket.disconnect();
+      s.disconnect();
+      setSocket(null);
     };
   }, [battleId]);
 
-  return socketRef;
+  return socket;
 }
