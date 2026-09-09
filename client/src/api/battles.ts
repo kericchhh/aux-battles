@@ -1,57 +1,19 @@
 import { apiFetch } from "./client";
+export type Stage = "DRUM" | "BASS" | "MELODY" | "FULL";
 
-export interface Battle {
-    id: string,
-    hostId: string,
-    guestId: string,
-    status: "PENDING" | "ONGOING" | "FINISHED",
-    winnerId: string,
-    rounds: number,
-    currentRound: number,
-    inviteCode: string,
-    hostSongId: string | null,
-    guestSongId: string | null,
-    createdAt: string,
-    updatedAt: string
+export interface BattleView {
+  id: string; status: "PENDING" | "ONGOING" | "FINISHED"; inviteCode: string;
+  currentRound: number; rounds: number; opponentJoined: boolean;
+  outcome: "WIN" | "LOSS" | "DRAW" | null; myScore: number; opponentScore: number;
+  round: {id: string; number: number; status: "SONG_PICKS" | "GUESSING" | "FINISHED";
+    myStage: Stage; myPoints: number; myFinished: boolean; opponentFinished: boolean;
+    myHasPicked: boolean; opponentHasPicked: boolean; myAttempts: number} | null;
+  previousRound: {number: number; myPoints: number; opponentPoints: number} | null;
 }
 
-type RoundStage = "DRUM" | "BASS" | "MELODY" | "FULL"
-type RoundStatus = "SONG_PICKS" | "GUESSING" | "FINISHED"
-
-export interface Round {
-    id: string,
-    battleId: string,
-    hostSongId: string ,
-    guestSongId: string ,
-    roundNumber: number,
-    hostStage: RoundStage,
-    guestStage: RoundStage,
-    hostPoints: number,
-    guestPoints: number,
-    status: RoundStatus
-}
-
-export interface BattleState {
-    battle: Battle,
-    round: Round | null
-}
-
-export function createBattle(rounds: number) {
-    return apiFetch<Battle>("/battles", {
-        method: "POST",
-        body: JSON.stringify({rounds})
-    })
-}
-
-export function joinBattle(inviteCode: string){
-    return apiFetch<Battle>("/battles/join", {
-        method: "POST",
-        body: JSON.stringify({inviteCode})
-    })
-}
-
-export function getBattle(id: string) {
-   return apiFetch<Battle>(`/battles/${id}`, {
-       method: "GET"
-   }) 
-}
+export type GuessResult = {correct: boolean; pointsAwarded: number; playerFinished: boolean; roundFinished: boolean; roundId: string};
+export const createBattle = (rounds: number) => apiFetch<{id: string}>("/battles", {method: "POST", body: JSON.stringify({rounds})});
+export const joinBattle = (inviteCode: string) => apiFetch<{id: string}>("/battles/join", {method: "POST", body: JSON.stringify({inviteCode})});
+export const getBattle = (id: string, signal?: AbortSignal) => apiFetch<BattleView>(`/battles/${id}`, {signal});
+export const pickSong = (battleId: string, roundId: string, songId: string) => apiFetch<{status: string}>(`/battles/${battleId}/rounds/picks`, {method: "POST", body: JSON.stringify({roundId, songId})});
+export const submitGuess = (roundId: string, guess: string, expectedAttempt: number) => apiFetch<GuessResult>(`/rounds/${roundId}/guess`, {method: "POST", body: JSON.stringify({guess, expectedAttempt})});

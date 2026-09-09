@@ -1,25 +1,27 @@
 import { useEffect, useState } from "react";
-import { io, type Socket } from "socket.io-client";
-
-export function useSocket(battleId: string | undefined) {
-  const [socket, setSocket] = useState<Socket | null>(null);
-
+import { useQueryClient } from "@tanstack/react-query";
+import { io } from "socket.io-client";
+import { API_URL } from "../api/client";
+export function useSocket(battleId: string, userId: string) {
+  const cache = useQueryClient();
+  const [connection, setConnection] = useState("Connecting…");
   useEffect(() => {
-    if (!battleId) return;
-
-    const s = io("http://localhost:5000");
-
-    s.on("connect", () => {
-      s.emit("battle:join", battleId);
+    const socket = io(API_URL, {withCredentials: true});
+    const refresh = () => { void cache.invalidateQueries({queryKey: ["battle", userId, battleId]}); };
+    socket.on("battle:changed", refresh);
+    socket.on("connect", () => {
+      socket.timeout(5000).emit("battle:join", battleId, (error: Error | null, result?: {ok: boolean}) => {
+        if (error || !result?.ok) { setConnection("Live updates unavailable; refreshing periodically"); void cache.invalidateQueries({queryKey: ["me"]}); }
+        else setConnection("Live updates connected");
+        refresh();
+      });
     });
-
-    setSocket(s);
-
-    return () => {
-      s.disconnect();
-      setSocket(null);
-    };
-  }, [battleId]);
-
-  return socket;
+    socket.on("disconnect", reason => {
+      setConnection("Disconnected; refreshing periodically");
+      if (reason === "io server disconnect") void cache.invalidateQueries({queryKey: ["me"]});
+    });
+    socket.on("connect_error", () => {setConnection("Reconnecting…"); void cache.invalidateQueries({queryKey: ["me"]});});
+    return () => {socket.removeAllListeners(); socket.disconnect();};
+  }, [battleId, userId, cache]);
+  return connection;
 }

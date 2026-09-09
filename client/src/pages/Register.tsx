@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { errorMessage } from "../api/client";
 import { register } from "../api/auth";
 import AuthFormLayout from "../components/AuthFormLayout";
 import ErrorBanner from "../components/ErrorBanner";
@@ -14,7 +14,6 @@ export default function Register() {
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
 
-    const { login } = useAuth();
     const navigate = useNavigate()
 
     async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -22,11 +21,10 @@ export default function Register() {
         setError(null)
         setLoading(true)
         try {
-            const data = await register({ username, email, password });
-            login(data.token, data.id, data.username)
-            navigate("/")
+            await register({ username: username.trim(), email: email.trim(), password });
+            navigate("/login", {state: {registered: true}})
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Registration failed")
+            setError(errorMessage(err))
         } finally {
             setLoading(false)
         }
@@ -37,21 +35,24 @@ export default function Register() {
 
             <Input
                 type="text"
-                placeholder="Username"
+                id="username" name="username" autoComplete="username"
+                aria-label="Username" placeholder="Username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
             />
             <Input
                 type="email"
-                placeholder="Email"
+                id="email" name="email" autoComplete="email"
+                aria-label="Email" placeholder="Email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
             />
             <Input
                 type="password"
-                placeholder="Password"
+                id="password" name="password" autoComplete="new-password"
+                aria-label="Password" placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required

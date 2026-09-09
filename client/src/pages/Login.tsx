@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
-import { login as loginRequest } from "../api/auth";
+import { useNavigate, useLocation, Link } from "react-router-dom";
+import { useAuth } from "../context/auth-context";
+import { errorMessage } from "../api/client";
 import AuthFormLayout from "../components/AuthFormLayout";
 import Input from "../components/Inputs";
 import Button from "../components/RegisterButton";
@@ -15,17 +15,17 @@ export default function Login() {
 
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
     setLoading(true);
     try {
-      const data = await loginRequest({ identifier, password });
-      login(data.token, data.id, data.username);
-      navigate("/");
+      await login(identifier.trim(), password);
+      navigate("/", {replace: true});
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      setError(errorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -33,18 +33,21 @@ export default function Login() {
 
   return (
     <AuthFormLayout title="Log In" onSubmit={handleSubmit}>
+      {location.state?.registered && <p role="status" className="text-green-300">Account created. Log in to continue.</p>}
       {error && <ErrorBanner message={error} />}
 
       <Input
         type="text"
-        placeholder="Username or email"
+        id="identifier" name="identifier" autoComplete="username"
+                aria-label="Username or email" placeholder="Username or email"
         value={identifier}
         onChange={(e) => setIdentifier(e.target.value)}
         required
       />
       <Input
         type="password"
-        placeholder="Password"
+        id="password" name="password" autoComplete="current-password"
+                aria-label="Password" placeholder="Password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
         required
