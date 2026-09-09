@@ -6,7 +6,7 @@ import { AppError } from "../utils/AppError.js";
 import { createSession, deleteSession, findSession } from "../services/sessions.js";
 
 export async function registerUser(req: Request, res: Response) {
-    const input = userRegisterSchema.parse(req.params);
+    const input = userRegisterSchema.parse(req.body);
     const user = await registerUserQuery({
         username: input.username,
         email: input.email,
@@ -27,7 +27,7 @@ export async function registerUser(req: Request, res: Response) {
 }
 
 export async function loginUser(req: Request, res: Response) {
-    const input = userLoginSchema.parse(req.params)
+    const input = userLoginSchema.parse(req.body)
     const user = await getUserByIdentifier(input.identifier);
 
     if (!user || !(await validateHash(input.password, user.passwordHash))){
