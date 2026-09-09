@@ -1,16 +1,23 @@
-import type { NextFunction, Request, Response } from "express";
+import type { ErrorRequestHandler } from "express";
+import { ZodError } from "zod";
 import { AppError } from "../utils/AppError.js";
 
-export function  errorHandler(err: Error, req: Request, res: Response, next: NextFunction) {
-    if(err instanceof AppError){
-        return res.status(err.statusCode).json({
-            success: false,
-            message: err.message
-        })
-    }
-    console.error(err)
-    return res.status(500).json({
-        success: false,
-        message: "Internal server error"
-    })
+function databaseCode(error: unknown, depth = 0): string | undefined {
+  if (depth > 4 || !error || typeof error !== "object") return undefined;
+  const value = error as { code?: unknown; cause?: unknown };
+  return typeof value.code === "string" ? value.code : databaseCode(value.cause, depth + 1);
 }
+export const errorHandler: ErrorRequestHandler = (error, req, res, next) => {
+  if (res.headersSent) { next(error); return; }
+  if (error instanceof ZodError) {
+    res.status(400).json({ message: "Invalid input", issues: error.issues.map(({ path, message }) => ({ path, message })) });
+    return;
+  }
+  if (error instanceof AppError) { res.status(error.statusCode).json({ message: error.message }); return; }
+  const code = databaseCode(error);
+  if (code === "23505" || code === "23503" || code === "23514") {
+    res.status(409).json({ message: "The action conflicts with existing data or game state" }); return;
+  }
+  console.error(error);
+  res.status(500).json({ message: "Internal server error" });
+};

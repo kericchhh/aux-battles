@@ -1,12 +1,10 @@
 import { Router } from "express";
 import {
-    getAllSongs,
-    getSongByID,
-    searchSongs,
     addSong,
     patchSong,
     deleteSong
 } from "../handlers/song.js";
+import { getAllSongs, searchSongs, getSongByID } from "../handlers/song-read.js";
 import { asyncHandler } from "../utils/AsyncHandler.js";
 import { requireAdmin } from "../middleware/adminMiddleware.js";
 import { uploadSong } from "../middleware/upload.js";

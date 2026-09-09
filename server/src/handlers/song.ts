@@ -1,34 +1,11 @@
 import type { Request, Response } from "express";
-import { getSongs, getSongById, searchSong, addSongQuery, patchSongQuery, deleteSongQuery } from "../db/queries/songs.js";
+import { addSongQuery, patchSongQuery, deleteSongQuery } from "../db/queries/songs.js";
 import { AppError } from "../utils/AppError.js";
-import { songCreateSchema, songIdSchema, songPatchSchema, songSearchSchema } from "../validation/songs.js";
+import { songCreateSchema, songIdSchema, songPatchSchema } from "../validation/songs.js";
 import type { songsTable } from "../db/schema.js";
 import path from "node:path";
 import fs from "node:fs/promises";
 import { separateSong } from "../utils/Demucs.js";
-
-export async function getAllSongs(req: Request, res: Response) {
-    const songs = await getSongs()
-    res.status(200).json(songs)
-}
-
-export async function getSongByID(req: Request, res: Response) { 
-    const result = songIdSchema.safeParse(req.params)
-    if(!result.success) throw new AppError("Invalid id", 400)
-    const {id} = result.data
-    const song = await getSongById(id)
-    if(!song) throw new AppError("Song not found", 404)
-    res.json(song)
-}
-
-export async function searchSongs(req: Request, res: Response) {
-    const result = songSearchSchema.safeParse(req.query)
-    if(!result.success) throw new AppError("Invalid query", 400);
-    const {q} = result.data
-    const songs = await searchSong(q)
-    if(!songs) throw new AppError("No matching songs found", 404) 
-    res.json(songs)
-}
 
 export async function addSong(req: Request, res: Response) {
     if(!req.file){

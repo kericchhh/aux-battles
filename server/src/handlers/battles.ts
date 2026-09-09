@@ -1,98 +1,38 @@
-import type {Request, Response} from "express"
-import { createBattle, getBattleByInvite, joinBattle, pickSongTransaction, getBattleById} from "../db/queries/battles.js"
-import { createLobbySchema, joinLobbySchema, pickSongSchema, battleIdSchema } from "../validation/battles.js"
+import type { Request, Response } from "express";
+import * as game from "../services/game.js";
+import { battleParams, createBattleInput, joinBattleInput, pickSongInput } from "../validation/game.js";
 import { AppError } from "../utils/AppError.js";
-import { getSongById } from "../db/queries/songs.js";
-import { getIO } from "../socket.js";
-import { getRoundByBattleId, getRoundById } from "../db/queries/rounds.js";
+import { notifyBattleChanged } from "../services/game-events.js";
 
-export async function getBattleByIdHandler(req: Request, res: Response) {
-    if(!req.userId){
-        throw new AppError("Unauthorized",401)
-    }
-    const parsedParams = battleIdSchema.safeParse(req.params)
-    if(!parsedParams.success){
-        throw new AppError("Invalid battle id", 404)
-    }
-    const {battleId} = parsedParams.data
-    const result = await getBattleById(battleId)
-    if(!result){
-        throw new AppError("Battle not found", 404)
-    }
-    res.status(200).json({result})
-}
-
-export async function getLobby(req: Request, res: Response) {
-    if(!req.userId){
-        throw new AppError("Unauthorized", 401)
-    }
-    const parsedParams = battleIdSchema.safeParse(req.params)
-    if(!parsedParams.success){
-        throw new AppError("Invalid battle id", 400)
-    }
-    const {battleId} = parsedParams.data
-    const battle = await getBattleById(battleId)
-    if(!battle){
-        throw new AppError("Battle not found", 404)
-    }
-    const isParticipant = battle.hostId === req.userId || battle.guestId === req.userId
-    if(!isParticipant) {
-        throw new AppError("You are not a participant of this battle", 403)
-    }
-
-    const rounds = await getRoundByBattleId(battleId)
-    const round = rounds.find((item) => item.roundNumber === battle.currentRound) ?? null
-    res.status(200).json({battle, round})
+function userId(req: Request) {
+  if (!req.userId) throw new AppError("Unauthorized", 401);
+  return req.userId;
 }
 
 export async function createLobby(req: Request, res: Response) {
-    if(!req.userId){
-        throw new AppError("Unauthorized", 401)
-    }
-    const {rounds} = createLobbySchema.parse(req.body);
-    const battle = await createBattle({hostId: req.userId, rounds});
-    res.status(201).json(battle)
+  const { rounds } = createBattleInput.parse(req.body);
+  res.status(201).json(await game.createBattle(userId(req), rounds));
 }
 
-export async function joinLobby(req: Request, res: Response){
-    if(!req.userId) {
-        throw new AppError("Unauthorized", 401)
-    }
-    const {inviteCode} = joinLobbySchema.parse(req.body)
-    const battle = await getBattleByInvite(inviteCode)
-    if(!battle){
-        throw new AppError("Battle not found", 404)
-    }
-    if(battle.status !== "PENDING"){
-        throw new AppError("Battle has already started", 400)
-    }
-    if(battle.hostId === req.userId){
-        throw new AppError("You can't join your own battle", 400)
-    }
-    if(battle.guestId){
-        throw new AppError("Lobby is full", 400)
-    }
-    const updatedBattle = await joinBattle(battle.id, req.userId)
-    res.status(200).json(updatedBattle)
+export async function joinLobby(req: Request, res: Response) {
+  const { inviteCode } = joinBattleInput.parse(req.body);
+  const result = await game.joinBattle(inviteCode, userId(req));
+  notifyBattleChanged(result.id);
+  res.json(result);
 }
 
-export async function pickSong(req: Request, res: Response){
-    if(!req.userId){
-        throw new AppError("Unauthorized", 401)
-    }
-    const battleId = req.params.battleId as string;
-    if(!battleId){
-        throw new AppError("Battle not found", 404)
-    }
-    const {songId} = pickSongSchema.parse(req.body)
-    if(!songId){
-        throw new AppError("Song not found", 404)
-    }
+export async function getLobby(req: Request, res: Response) {
+  const { battleId } = battleParams.parse(req.params);
+  res.setHeader("Cache-Control", "no-store");
+  res.json(await game.getBattleView(battleId, userId(req)));
+}
 
-    const song = await getSongById(songId)
-    if(!song) throw new AppError("Song not found", 404)
-    if(song.status !== "READY") throw new AppError("Song is not available yet", 400)
-    const result = await pickSongTransaction(battleId, req.userId, songId)
-    getIO().to(battleId).emit("battle:update", result)
-    res.status(result.status === "ROUND_STARTED" ? 201 : 200).json(result)
+export const getBattleByIdHandler = getLobby;
+
+export async function pickSong(req: Request, res: Response) {
+  const { battleId } = battleParams.parse(req.params);
+  const input = pickSongInput.parse(req.body);
+  const result = await game.pickSong(battleId, userId(req), input.roundId, input.songId);
+  notifyBattleChanged(battleId);
+  res.json(result);
 }

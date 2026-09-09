@@ -3,42 +3,64 @@ import { userRegisterSchema, userLoginSchema } from "../validation/users.js";
 import { getUserByIdentifier, registerUserQuery } from "../db/queries/users.js";
 import { hashPassword, makeJWT, makeRefreshToken, validateHash } from "../utils/Auth.js";
 import { AppError } from "../utils/AppError.js";
-import { saveRefreshToken } from "../db/queries/refresh.js";
+import { createSession, deleteSession, findSession } from "../services/sessions.js";
 
 export async function registerUser(req: Request, res: Response) {
-    const user = userRegisterSchema.parse(req.body)
-    const hashed = await hashPassword(user.password)
-    const registerUser = await registerUserQuery({
+    const input = userRegisterSchema.parse(req.params);
+    const user = await registerUserQuery({
+        username: input.username,
+        email: input.email,
+        avatarUrl: input.avatarUrl ?? null,
+        passwordHash: await hashPassword(input.password),
+        role: "USER"
+    });
+
+    if (!user){
+        throw new AppError("Could not create user", 500)
+    }
+
+    res.status(201).json({
+        id: user.id,
         username: user.username,
-        email: user.email,
-        avatarUrl: user.avatarUrl,
-        role: user.role,
-        passwordHash: hashed
-    })
-    if (!registerUser)throw new AppError("Could not create user", 400)
-    res.status(200).json({ id: registerUser.id, email: registerUser.email, role: registerUser.role })
+        email: user.email
+    });
 }
 
 export async function loginUser(req: Request, res: Response) {
-    const user = userLoginSchema.parse(req.body)
-    const loginUser = await getUserByIdentifier(user.identifier)
-    if(!loginUser)throw new AppError("Invalid credentials", 404)
+    const input = userLoginSchema.parse(req.params)
+    const user = await getUserByIdentifier(input.identifier);
 
-    const match = await validateHash(user.password, loginUser.passwordHash)
-    if(!match)throw new AppError("Invalid credentials", 404)
-    
-    const token = makeJWT(loginUser.id, 3600, process.env.JWT_SECRET!)
-    const refreshToken = makeRefreshToken()
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-    const saved = await saveRefreshToken(loginUser.id, refreshToken, expiresAt)
-    if(!saved)throw new AppError("Could not save refresh token")
-    res.status(200).json({
-        id: loginUser.id,
-        createdAt: loginUser.createdAt,
-        updatedAt: loginUser.updatedAt,
-        email: loginUser.email,
-        username: loginUser.username,
-        token: token,
-        refreshToken: refreshToken
-    })
+    if (!user || !(await validateHash(input.password, user.passwordHash))){
+        throw new AppError("Invalid credentials", 401)
+    }
+
+    await deleteSession(req.headers.cookie, res);
+    await createSession(user.id, res);
+
+    res.json({
+        id: user.id,
+        username: user.username,
+        email: user.email
+    });
+}
+
+export async function getCurrentUser(req: Request, res: Response) {
+    res.setHeader("Cache-Control", "no-store");
+
+    const session = await findSession(req.headers.cookie);
+
+    if (!session){
+        throw new AppError("Please log in", 401)
+    }
+
+    res.json({
+        id: session.userId,
+        username: session.username,
+        email: session.email
+    });
+}
+
+export async function logoutUser(req: Request, res: Response) {
+    await deleteSession(req.headers.cookie, res);
+    res.status(204).end();
 }

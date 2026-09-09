@@ -1,7 +1,9 @@
 import type { Request, Response, NextFunction } from "express";
 
-export function asyncHandler(handler: (req: Request, res: Response) => Promise<void>){
-    return (req:Request, res: Response, next: NextFunction) => {
-        Promise.resolve(handler(req,res)).catch(next)
+type AsyncRoute = (req: Request, res: Response, next: NextFunction) => Promise<void>
+
+export function asyncHandler(handler: AsyncRoute) {
+    return (req: Request, res: Response, next: NextFunction) => {
+        Promise.resolve().then(() => handler(req,res,next)).catch(next);
     }
 }
