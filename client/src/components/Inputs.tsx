@@ -1,10 +1,12 @@
-interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {}
+import type { InputHTMLAttributes } from "react";
 
-export default function Input(props: InputProps) {
+type InputProps = InputHTMLAttributes<HTMLInputElement>;
+
+export default function Input({ className = "", ...props }: InputProps) {
   return (
     <input
       {...props}
-      className="bg-neutral-800 text-muted  rounded px-3 py-2 outline-none focus:ring-2"
+      className={`rounded bg-neutral-800 px-3 py-2 text-muted outline-none focus:ring-2 ${className}`}
     />
   );
 }
