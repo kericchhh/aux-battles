@@ -10,3 +10,4 @@ export function useBattle(battleId: string, userId: string) {
   const guess = useMutation({mutationFn: (input: {roundId: string; guess: string; expectedAttempt: number}) => api.submitGuess(input.roundId, input.guess, input.expectedAttempt), onSettled: refresh});
   return {...query, pick, guess};
 }
+export type BattleGame = ReturnType<typeof useBattle>;

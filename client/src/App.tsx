@@ -1,69 +1,82 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { AuthProvider } from "./context/AuthContext";
-import NavBar from "./components/Navbar"
-
-import Login from "./pages/Login";
-import Register from "./pages/Register";
-import Lobby from "./pages/Lobby";
-import Battle from "./pages/Battle";
-import Profile from "./pages/Profile";
+import {
+  BrowserRouter,
+  Navigate,
+  Outlet,
+  Route,
+  Routes,
+} from "react-router-dom";
+import NavBar from "./components/Navbar";
 import ProtectedRoute from "./components/ProtectedRoute";
+import { AuthProvider } from "./context/AuthContext";
+import Battle from "./pages/Battle";
+import Lobby from "./pages/Lobby";
+import Login from "./pages/Login";
+import Profile from "./pages/Profile";
+import Register from "./pages/Register";
+
+function AuthenticatedLayout() {
+  return (
+    <div className="flex min-h-dvh flex-col bg-app text-foreground">
+      <NavBar />
+
+      <main className="min-h-0 flex-1 bg-app">
+        <Outlet />
+      </main>
+    </div>
+  );
+}
 
 export default function App() {
-    return (
-        <AuthProvider>
-            <BrowserRouter>
-                <div className="h-screen w-screen overflow-hidden bg-[#0d1020]">
-                    <Routes>
-                        <Route path="/login" element={<Login />} />
-                        <Route path="/register" element={<Register />} />
+  return (
+    <AuthProvider>
+      <BrowserRouter>
+        <div className="min-h-dvh w-full bg-app">
+          <Routes>
+            <Route
+              path="/login"
+              element={<Login />}
+            />
 
-                        <Route
-                            path="/"
-                            element={
-                                <ProtectedRoute>
-                                    <div className="flex h-screen flex-col overflow-hidden">
-                                        <NavBar />
+            <Route
+              path="/register"
+              element={<Register />}
+            />
 
-                                        <main className="min-h-0 flex-1 overflow-hidden">
-                                            <Lobby />
-                                        </main>
-                                    </div>
-                                </ProtectedRoute>
-                            }
-                        />
+            <Route
+              element={
+                <ProtectedRoute>
+                  <AuthenticatedLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route
+                index
+                element={<Lobby />}
+              />
 
-                        <Route
-                            path="/battle/:battleId"
-                            element={
-                                <ProtectedRoute>
-                                    <div className="flex h-screen flex-col overflow-hidden">
-                                        <NavBar />
+              <Route
+                path="battle/:battleId"
+                element={<Battle />}
+              />
 
-                                        <main className="min-h-0 flex-1 overflow-hidden">
-                                            <Battle />
-                                        </main>
-                                    </div>
-                                </ProtectedRoute>
-                            }
-                        />
+              <Route
+                path="profile/:id"
+                element={<Profile />}
+              />
+            </Route>
 
-                        <Route
-                            path="/profile/:id"
-                            element={
-                                <ProtectedRoute>
-                                    <div className="flex h-screen flex-col">
-                                        <NavBar />
-                                        <main className="min-h-0 flex-1">
-                                            <Profile />
-                                        </main>
-                                    </div>
-                                </ProtectedRoute>
-                            }
-                        />
-                    </Routes>
-                </div>
-            </BrowserRouter>
-        </AuthProvider>
-    );
+            <Route
+              path="*"
+              element={
+                <Navigate
+                  to="/"
+                  replace
+                />
+              }
+            />
+          </Routes>
+        </div>
+      </BrowserRouter>
+    </AuthProvider>
+  );
 }

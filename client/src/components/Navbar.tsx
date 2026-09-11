@@ -1,10 +1,47 @@
-import { Link } from "react-router-dom";
+import { useState } from "react";
+import {
+  Link,
+  useNavigate,
+} from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faVolumeHigh } from "@fortawesome/free-solid-svg-icons";
 import { useAuth } from "../context/auth-context";
 
+const navAction = `
+  rounded-lg
+  border border-transparent
+  px-3 py-2
+  text-sm text-muted
+  transition-colors
+  hover:text-primary
+  disabled:cursor-not-allowed
+  disabled:opacity-50
+`;
+
 export default function NavBar() {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const [isLoggingOut, setIsLoggingOut] =
+    useState(false);
+
+  async function handleLogout() {
+    if (isLoggingOut) return;
+
+    setIsLoggingOut(true);
+
+    try {
+      await logout();
+
+      navigate("/login", {
+        replace: true,
+        state: {
+          loggedOut: true,
+        },
+      });
+    } finally {
+      setIsLoggingOut(false);
+    }
+  }
 
   return (
     <nav className="flex h-16 shrink-0 items-center border-b border-white/10 bg-surface px-6">
@@ -22,36 +59,39 @@ export default function NavBar() {
         </Link>
       </div>
 
-      <div className="ml-auto flex items-center gap-6">
+      <div className="ml-auto flex items-center gap-2">
         {user ? (
           <>
             <Link
               to={`/profile/${user.id}`}
-              className="text-sm text-muted transition-colors hover:text-foreground"
+              className={navAction}
             >
               Profile
             </Link>
 
             <button
               type="button"
-              onClick={() => void logout()}
-              className="text-sm text-muted transition-colors hover:text-foreground"
+              disabled={isLoggingOut}
+              onClick={() => void handleLogout()}
+              className={navAction}
             >
-              Log out
+              {isLoggingOut
+                ? "Logging out…"
+                : "Log out"}
             </button>
           </>
         ) : (
           <>
             <Link
               to="/register"
-              className="text-sm text-muted transition-colors hover:text-foreground"
+              className={navAction}
             >
               Register
             </Link>
 
             <Link
               to="/login"
-              className="text-sm text-muted transition-colors hover:text-foreground"
+              className={navAction}
             >
               Log in
             </Link>

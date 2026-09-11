@@ -1,7 +1,31 @@
 import { apiFetch } from "./client";
-export type Song = {id: string; title: string; artist: string; genre: string; duration: number};
-export function getSongs(q: string, offset: number, signal?: AbortSignal) {
-  const params = new URLSearchParams({limit: "20", offset: String(offset)});
-  if (q) params.set("q", q);
-  return apiFetch<Song[]>(`/songs${q ? "/search" : ""}?${params}`, {signal});
+
+export type Song = {
+  id: string;
+  title: string;
+  artist: string;
+  genre: string;
+  duration: number;
+};
+
+export const SONG_PAGE_SIZE = 20;
+
+export function getSongs(
+  query: string,
+  offset: number,
+  signal?: AbortSignal,
+) {
+  const params = new URLSearchParams({
+    limit: String(SONG_PAGE_SIZE),
+    offset: String(offset),
+  });
+
+  if (query) {
+    params.set("q", query);
+  }
+
+  return apiFetch<Song[]>(
+    `/songs${query ? "/search" : ""}?${params}`,
+    { signal },
+  );
 }

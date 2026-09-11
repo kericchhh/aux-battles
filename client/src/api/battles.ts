@@ -1,13 +1,24 @@
 import { apiFetch } from "./client";
 export type Stage = "DRUM" | "BASS" | "MELODY" | "FULL";
 
+export interface BattleRound {
+  id: string;
+  number: number;
+  status: "SONG_PICKS" | "GUESSING" | "FINISHED";
+  myStage: Stage;
+  myPoints: number;
+  myFinished: boolean;
+  opponentFinished: boolean;
+  myHasPicked: boolean;
+  opponentHasPicked: boolean;
+  myAttempts: number;
+}
+
 export interface BattleView {
   id: string; status: "PENDING" | "ONGOING" | "FINISHED"; inviteCode: string;
   currentRound: number; rounds: number; opponentJoined: boolean;
   outcome: "WIN" | "LOSS" | "DRAW" | null; myScore: number; opponentScore: number;
-  round: {id: string; number: number; status: "SONG_PICKS" | "GUESSING" | "FINISHED";
-    myStage: Stage; myPoints: number; myFinished: boolean; opponentFinished: boolean;
-    myHasPicked: boolean; opponentHasPicked: boolean; myAttempts: number} | null;
+  round: BattleRound;  
   previousRound: {number: number; myPoints: number; opponentPoints: number} | null;
 }
 

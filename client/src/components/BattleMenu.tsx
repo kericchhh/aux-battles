@@ -89,15 +89,15 @@ export default function BattleMenu() {
 
   return (
     <div className="flex h-full w-full items-center justify-center">
-      <div className="w-[450px] overflow-hidden rounded-2xl border border-[#5964a6] bg-[#090a11] font-sans text-[#f4f0f7] shadow-lg backdrop-blur-sm">
+      <div className="w-[450px] overflow-hidden rounded-2xl border border-primary bg-surface font-sans text-[#f4f0f7] shadow-lg backdrop-blur-sm">
         <div className="flex">
           <button
             type="button"
             onClick={() => switchTab("create")}
             className={`flex-1 py-4 text-center transition-colors ${
               activeTab === "create"
-                ? "bg-[#5964a6] font-semibold"
-                : "hover:bg-[#959cc6]"
+                ? "bg-primary font-semibold"
+                : "hover:bg-primary-soft"
             }`}
           >
             Create a room
@@ -108,8 +108,8 @@ export default function BattleMenu() {
             onClick={() => switchTab("join")}
             className={`flex-1 py-4 text-center transition-colors ${
               activeTab === "join"
-                ? "bg-[#5964a6] font-semibold"
-                : "hover:bg-[#959cc6]"
+                ? "bg-primary font-semibold"
+                : "hover:bg-primary-soft"
             }`}
           >
             Join with a code
@@ -141,7 +141,7 @@ export default function BattleMenu() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="rounded-xl bg-[#5964a6] px-8 py-3 text-sm font-medium uppercase tracking-wider transition-colors hover:bg-[#959cc6] hover:text-black disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-xl bg-primary px-8 py-3 text-sm font-medium uppercase tracking-wider transition-colors hover:bg-primary-soft hover:text-black disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSubmitting ? "Creating..." : "Create Battle"}
               </button>
@@ -175,7 +175,7 @@ export default function BattleMenu() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="rounded-xl bg-[#5964a6] px-12 py-3 text-sm font-medium tracking-wider transition-colors hover:bg-[#959cc6] hover:text-black disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-xl bg-primary px-12 py-3 text-sm font-medium tracking-wider transition-colors hover:bg-primary-soft hover:text-black disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSubmitting ? "Joining..." : "Join"}
               </button>

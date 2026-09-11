@@ -9,7 +9,7 @@ export default function Lobby() {
         flex-col
         items-center
         justify-center
-        bg-[radial-gradient(circle_at_35%_35%,#29345f_0%,#171b32_35%,#0d1020_100%)]
+        bg-app
       "
         >
             <BattleMenu />

@@ -5,7 +5,7 @@ import { register } from "../api/auth";
 import AuthFormLayout from "../components/AuthFormLayout";
 import ErrorBanner from "../components/ErrorBanner";
 import Input from "../components/Inputs";
-import RegisterButton from "../components/RegisterButton";
+import RegisterButton from "../components/Button";
 
 export default function Register() {
     const [username, setUsername] = useState("");
@@ -64,7 +64,7 @@ export default function Register() {
 
             <p className="text-neutral-400 text-sm text-center mt-2">
                 Already have an account?{" "}
-                <Link to="/login" className="text-[#7780b6] hover:underline">
+                <Link to="/login" className="text-muted hover:underline">
                     Log in
                 </Link>
             </p>

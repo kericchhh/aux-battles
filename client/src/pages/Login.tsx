@@ -1,65 +1,142 @@
 import { useState } from "react";
-import { useNavigate, useLocation, Link } from "react-router-dom";
-import { useAuth } from "../context/auth-context";
+import {
+  Link,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 import { errorMessage } from "../api/client";
 import AuthFormLayout from "../components/AuthFormLayout";
-import Input from "../components/Inputs";
-import Button from "../components/RegisterButton";
+import Button from "../components/Button";
 import ErrorBanner from "../components/ErrorBanner";
+import Input from "../components/Inputs";
+import { useAuth } from "../context/auth-context";
+
+interface LoginLocationState {
+  from?: string;
+  registered?: boolean;
+  loggedOut?: boolean;
+}
 
 export default function Login() {
-  const [identifier, setIdentifier] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [identifier, setIdentifier] =
+    useState("");
+
+  const [password, setPassword] =
+    useState("");
+
+  const [error, setError] =
+    useState<string | null>(null);
+
+  const [loading, setLoading] =
+    useState(false);
 
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  const locationState =
+    location.state as LoginLocationState | null;
+
+  async function handleSubmit(
+    event: React.SyntheticEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    if (loading) return;
+
     setError(null);
     setLoading(true);
+
     try {
-      await login(identifier.trim(), password);
-      navigate("/", {replace: true});
-    } catch (err) {
-      setError(errorMessage(err));
+      await login(
+        identifier.trim(),
+        password,
+      );
+
+      navigate(
+        locationState?.from ?? "/",
+        {
+          replace: true,
+        },
+      );
+    } catch (caughtError) {
+      setError(
+        errorMessage(caughtError),
+      );
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <AuthFormLayout title="Log In" onSubmit={handleSubmit}>
-      {location.state?.registered && <p role="status" className="text-green-300">Account created. Log in to continue.</p>}
-      {error && <ErrorBanner message={error} />}
+    <AuthFormLayout
+      title="Log in"
+      onSubmit={handleSubmit}
+    >
+      {locationState?.registered && (
+        <p
+          role="status"
+          className="text-sm text-green-300"
+        >
+          Account created. Log in to continue.
+        </p>
+      )}
+
+      {locationState?.loggedOut && (
+        <p
+          role="status"
+          className="text-sm text-muted"
+        >
+          You have been logged out.
+        </p>
+      )}
+
+      {error && (
+        <ErrorBanner message={error} />
+      )}
 
       <Input
         type="text"
-        id="identifier" name="identifier" autoComplete="username"
-                aria-label="Username or email" placeholder="Username or email"
+        id="identifier"
+        name="identifier"
+        autoComplete="username"
+        aria-label="Username or email"
+        placeholder="Username or email"
         value={identifier}
-        onChange={(e) => setIdentifier(e.target.value)}
+        onChange={(event) =>
+          setIdentifier(event.target.value)
+        }
         required
       />
+
       <Input
         type="password"
-        id="password" name="password" autoComplete="current-password"
-                aria-label="Password" placeholder="Password"
+        id="password"
+        name="password"
+        autoComplete="current-password"
+        aria-label="Password"
+        placeholder="Password"
         value={password}
-        onChange={(e) => setPassword(e.target.value)}
+        onChange={(event) =>
+          setPassword(event.target.value)
+        }
         required
       />
 
-      <Button type="submit" loading={loading}>
-        {loading ? "Logging in..." : "Log In"}
+      <Button
+        type="submit"
+        loading={loading}
+        loadingText="Logging in…"
+      >
+        Log in
       </Button>
 
-      <p className="text-neutral-400 text-sm text-center mt-2">
+      <p className="mt-2 text-center text-sm text-muted">
         Don't have an account?{" "}
-        <Link to="/register" className="text-[#7780b6] hover:underline">
+        <Link
+          to="/register"
+          className="text-primary hover:text-primary-hover hover:underline"
+        >
           Register
         </Link>
       </p>
