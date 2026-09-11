@@ -1,6 +1,6 @@
 import type { Response, Request } from "express";
-import { userRegisterSchema, userLoginSchema } from "../validation/users.js";
-import { getUserByIdentifier, registerUserQuery } from "../db/queries/users.js";
+import { userRegisterSchema, userLoginSchema, userIdSchema } from "../validation/users.js";
+import { getProfile, getUserByIdentifier, registerUserQuery } from "../db/queries/users.js";
 import { hashPassword, makeJWT, makeRefreshToken, validateHash } from "../utils/Auth.js";
 import { AppError } from "../utils/AppError.js";
 import { createSession, deleteSession, findSession } from "../services/sessions.js";
@@ -63,4 +63,11 @@ export async function getCurrentUser(req: Request, res: Response) {
 export async function logoutUser(req: Request, res: Response) {
     await deleteSession(req.headers.cookie, res);
     res.status(204).end();
+}
+
+export async function getProfileHandler(req: Request, res: Response){
+    const { id } = userIdSchema.parse(req.params)
+    const profile = await getProfile(id)
+    if (!profile) throw new AppError("User not found", 404) 
+    res.json(profile)
 }

@@ -1,0 +1,24 @@
+@theme static {
+  --color-primary: #5964a6;
+  --color-primary-hover: #737ec0;
+  --color-primary-soft: #959cc6;
+
+  --color-canvas: #0d1020;
+  --color-surface: #090a11;
+  --color-surface-raised: #171b32;
+  --color-glow: #29345f;
+
+  --color-foreground: #f4f0f7;
+  --color-muted: #b9bdd8;
+
+  --font-sans: "Electrolize", sans-serif;
+}
+
+@utility bg-app {
+  background-image: radial-gradient(
+    circle at 35% 35%,
+    var(--color-glow) 0%,
+    var(--color-surface-raised) 35%,
+    var(--color-canvas) 100%
+  );
+}

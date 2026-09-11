@@ -11,7 +11,7 @@ import ErrorBanner from "../components/ErrorBanner";
 
 type Game = ReturnType<typeof useBattle>;
 type Round = NonNullable<BattleView["round"]>;
-const button = "rounded-xl bg-[#5964a6] px-5 py-3 font-medium text-white hover:bg-[#737ec0] disabled:cursor-not-allowed disabled:opacity-50";
+const button = "rounded-xl bg-primary px-5 py-3 font-medium text-white hover:bg-[#737ec0] disabled:cursor-not-allowed disabled:opacity-50";
 const panel = "rounded-2xl border border-[#5964a6]/60 bg-[#090a11]/90 p-6 sm:p-8";
 
 export default function Battle() {
