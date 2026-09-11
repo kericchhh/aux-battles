@@ -200,3 +200,52 @@ export async function getAudioPath(roundId: string, userId: string) {
     return required(paths[stage], "Audio file is unavailable", 404);
   });
 }
+
+export async function getOpponentId(
+  battleId: string,
+  userId: string,
+) {
+  const battle = required(
+    await battles.getBattleById(battleId),
+    "Battle not found",
+    404,
+  );
+
+  assertParticipant(battle, userId);
+
+  return battle.hostId === userId
+    ? battle.guestId
+    : battle.hostId;
+}
+
+export async function forfeitBattle(
+  battleId: string,
+  disconnectedUserId: string,
+) {
+  return db.transaction(async (tx) => {
+    const battle = await lockBattle(
+      battleId,
+      disconnectedUserId,
+      tx,
+    );
+
+    if (battle.status !== "ONGOING") {
+      return null;
+    }
+
+    const winnerId =
+      battle.hostId === disconnectedUserId
+        ? battle.guestId
+        : battle.hostId;
+
+    if (!winnerId) {
+      return null;
+    }
+
+    return battles.finishBattle(
+      battle.id,
+      winnerId,
+      tx,
+    );
+  });
+}
