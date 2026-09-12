@@ -1,46 +1,44 @@
 import type { Request, Response } from "express";
 import { addSongQuery, patchSongQuery, deleteSongQuery } from "../db/queries/songs.js";
 import { AppError } from "../utils/AppError.js";
-import { songCreateSchema, songIdSchema, songPatchSchema } from "../validation/songs.js";
+import { songIdSchema, songPatchSchema, songUploadSchema } from "../validation/songs.js";
 import type { songsTable } from "../db/schema.js";
 import path from "node:path";
 import fs from "node:fs/promises";
-import { separateSong } from "../utils/Demucs.js";
+import { db } from "../db/index.js";
+import { enqueueSongProcessing } from "../services/song-jobs.js";
 
 export async function addSong(req: Request, res: Response) {
     if(!req.file){
         throw new AppError("Song file is required", 400)
     }
-    const result = songCreateSchema.safeParse(req.body)
-    if(!result.success) throw new AppError("Invalid fields", 400)
-    const created = await addSongQuery({...result.data, status: "PROCESSING"})
-    if(!created) throw new AppError("Could not add song, try again", 404)
     const originalPath = path.resolve(req.file.path)
-    res.status(201).json(created)
-    processSongStems(created.id, originalPath).catch((err) => {
-        console.error(`Stem separation failed for song ${created.id}:`,err)
-    })
-}
-
-async function processSongStems(songId: string, originalPath: string){ 
-    const stemsOutputDir = path.resolve("uploads", "stems", songId)
-    await fs.mkdir(stemsOutputDir, {recursive: true})
+    const result = songUploadSchema.safeParse(req.body)
+    if(!result.success){
+        await fs.rm(originalPath, {force: true});
+        throw new AppError("Invalid fields", 400)
+    }
+    const { clipStartSeconds, ...metadata } = result.data
     try{
-        await separateSong(originalPath, stemsOutputDir)
-        const filenameNoExt = path.basename(originalPath, path.extname(originalPath))
-        const demucsOutDir = path.join(stemsOutputDir, "htdemucs", filenameNoExt)
-        await patchSongQuery(songId, {
-            status: "READY",
-            fullSongPath: originalPath,
-            drumsPath: path.join(demucsOutDir,"drums.mp3"),
-            bassPath: path.join(demucsOutDir, "bass.mp3"),
-            melodyPath: path.join(demucsOutDir, "other.mp3"),
-            vocalsPath: path.join(demucsOutDir, "vocals.mp3")
+        const created = await db.transaction(async (tx) => {
+            const song = await addSongQuery({ ...metadata, status: "PROCESSING"},tx)
+            if (!song) {
+                throw new AppError("Could not create song", 500)
+            }
+            await enqueueSongProcessing({
+                songId: song.id,
+                originalPath,
+                clipStartSeconds,
+            }, tx)
+            return song
         })
-        console.log(`Song ${songId} processed successfully`)
-    }catch (err){
-        await patchSongQuery(songId, {status: "FAILED"})
-        throw err
+        res.status(202).json({
+            id: created.id,
+            status: created.status
+        })
+    }catch (error) {
+        await fs.rm(originalPath, {force: true})
+        throw error
     }
 }
 

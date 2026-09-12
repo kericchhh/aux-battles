@@ -7,6 +7,7 @@ import battleRoutes from "./routes/battles.routes.js"
 import roundsRoutes from "./routes/rounds.routes.js"
 import { errorHandler } from "./middleware/errorMiddleware.js";
 import { initSocket } from "./socket.js";
+import { startQueue } from "./services/queue.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -25,6 +26,15 @@ app.use(errorHandler)
 const httpServer = http.createServer(app)
 initSocket(httpServer)
 
-httpServer.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+async function startServer() {
+    await startQueue();
+
+    httpServer.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+    });
+}
+
+startServer().catch((error) => {
+    console.error("Server startup failed:", error);
+    process.exitCode = 1;
 });

@@ -1,32 +1,31 @@
 import multer from "multer";
-import path from "path";
 import fs from "fs";
+import { randomUUID } from "crypto";
+import { INCOMING_ROOT } from "../config/media.js";
 
-const uploadDir = "../../uploads/originals/";
-
-fs.mkdirSync(uploadDir, { recursive: true });
+fs.mkdirSync(INCOMING_ROOT, { recursive: true });
 
 const storage = multer.diskStorage({
     destination: (_req, _file, cb) => {
-        cb(null, uploadDir);
+        cb(null, INCOMING_ROOT);
     },
 
-    filename: (_req, file, cb) => {
-        const ext = path.extname(file.originalname);
-        cb(null, `${Date.now()}${ext}`);
+    filename: (_req, _file, cb) => {
+        cb(null, `${randomUUID()}.mp3`);
     },
 });
 
 export const uploadSong = multer({
     storage,
+    limits: {
+        files: 1,
+        fileSize: 30 * 1024 * 1024,
+    },
     fileFilter: (_req, file, cb) => {
-        if (
+        cb(
+            null,
             file.mimetype === "audio/mpeg" ||
-            file.mimetype === "audio/mp3"
-        ) {
-            cb(null, true);
-        } else {
-            cb(new Error("Only MP3 files are allowed"));
-        }
+                file.mimetype === "audio/mp3"
+        );
     },
 });
