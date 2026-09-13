@@ -1,16 +1,19 @@
 import { sql } from "drizzle-orm";
 import { fromDrizzle } from "pg-boss";
+import { z } from "zod";
 import type { Transaction } from "../db/types.js";
 import {
     PROCESS_SONG_QUEUE,
     queue,
 } from "./queue.js";
 
-export interface ProcessSongJob {
-    songId: string;
-    originalPath: string;
-    clipStartSeconds: number;
-}
+export const processSongJobSchema = z.object({
+    songId: z.string().uuid(),
+    originalPath: z.string().min(1),
+    clipStartSeconds: z.number().finite().nonnegative(),
+});
+
+export type ProcessSongJob = z.infer<typeof processSongJobSchema>;
 
 export async function enqueueSongProcessing(
     job: ProcessSongJob,
