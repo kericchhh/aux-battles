@@ -24,6 +24,8 @@ aux-battles/
 - Node.js 20 or newer
 - PostgreSQL 14 or newer
 - npm
+- FFmpeg and ffprobe
+- Python with Demucs installed in `worker/venv`
 
 ## Backend setup
 ```code
@@ -41,6 +43,10 @@ CLIENT_ORIGIN=http://localhost:5173
 #### Start the API:
 ```code
 npm run dev
+```
+#### Start the song-processing worker in another terminal:
+```code
+npm run worker
 ```
 #### The API runs at http://localhost:5000.
 
@@ -98,7 +104,10 @@ Songs are uploaded through the protected songs endpoint. The request must be mul
 
 - `song`: the audio file
 - `title`: the song title
-- Any other fields required by `server/src/validation/songs.ts`
+- `artist`: the artist name
+- `genre`: the genre
+- `duration`: the source duration in seconds
+- `clipStartSeconds`: where the 12-second game clip should begin
 
 Example using cURL:
 
@@ -106,6 +115,10 @@ Example using cURL:
 curl -X POST http://localhost:5000/songs \
   -H "Cookie: aux_session=YOUR_SESSION_COOKIE" \
   -F "title=Example Song" \
+  -F "artist=Example Artist" \
+  -F "genre=Rock" \
+  -F "duration=180" \
+  -F "clipStartSeconds=30" \
   -F "song=@/absolute/path/to/example.mp3"
 ```
 Generating stems with Demucs
@@ -115,10 +128,10 @@ Aux Battles uses Demucs to separate an uploaded song into vocals, drums, bass, a
 ```bash
 sudo apt install ffmpeg
 ```
-2. Create a Python virtual environment:
+2. Create the worker's Python virtual environment from the repository root:
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
+python3 -m venv worker/venv
+source worker/venv/bin/activate
 pip install demucs
 ```
 3. Test Demucs manually:
@@ -137,7 +150,7 @@ uploads/stems/htdemucs/song/
 ├── other.mp3
 └── vocals.mp3
 ```
-#### The backend processes stems automatically after a song upload. It stores paths for:
+#### The API queues processing after an upload. The separate worker extracts a 12-second clip, runs Demucs, and stores paths for:
 ```text
 fullSongPath
 drumsPath
@@ -145,7 +158,7 @@ bassPath
 melodyPath
 vocalsPath
 ```
-Make sure the backend process has permission to create and read the uploads directory.
+Make sure the API and worker can both create and read the configured media directory. The default is `storage/` in the repository root and can be changed with `MEDIA_ROOT`.
 ## Authentication flow
 
 1. POST /users/register creates an account.
