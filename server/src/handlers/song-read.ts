@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
-import { getSongs, getSongCatalogById, searchSong } from "../db/queries/songs.js";
+import { getSongById, getSongs, getSongCatalogById, searchSong } from "../db/queries/songs.js";
 import { AppError } from "../utils/AppError.js";
 
 const pagination = z.object({
@@ -20,4 +20,18 @@ export async function getSongByID(req: Request, res: Response) {
   const song = await getSongCatalogById(id);
   if (!song) throw new AppError("Song not found", 404);
   res.json(song);
+}
+
+export async function getSongStatus(req: Request, res: Response) {
+  const id = z.string().uuid().parse(req.params.id);
+  const song = await getSongById(id);
+  if (!song) throw new AppError("Song not found", 404);
+
+  res.setHeader("Cache-Control", "no-store");
+  res.json({
+    id: song.id,
+    title: song.title,
+    artist: song.artist,
+    status: song.status,
+  });
 }

@@ -7,6 +7,9 @@ export const queryKeys = {
   songs: (query: string, offset: number) =>
     ["songs", query, offset] as const,
 
+  songStatus: (id: string) =>
+    ["song-status", id] as const,
+
   profile: (id: string) =>
     ["profile", id] as const,
 };

@@ -9,6 +9,7 @@ import Button from "../Button";
 import ErrorBanner from "../ErrorBanner";
 import Input from "../Inputs";
 import Panel from "../Panel";
+import SongUploadPanel from "./SongUploadPanel";
 
 interface SongSelectionProps {
   game: BattleGame;
@@ -21,6 +22,7 @@ interface SelectedSong {
 }
 
 export default function SongSelection({ game, round }: SongSelectionProps) {
+  const [mode, setMode] = useState<"catalog" | "upload">("catalog");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState({ query: "", offset: 0 });
   const [selected, setSelected] = useState<SelectedSong | null>(null);
@@ -59,71 +61,115 @@ export default function SongSelection({ game, round }: SongSelectionProps) {
         <p role="status" className="mt-6">Your song is locked in. Waiting for your opponent…</p>
       ) : (
         <>
-          <form onSubmit={submitSearch} className="my-6 flex flex-wrap gap-3">
-            <label className="sr-only" htmlFor="song-search">Search song titles</label>
-            <Input
-              id="song-search"
-              maxLength={255}
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search song titles"
-              className="min-w-0 flex-1"
-            />
-            <Button type="submit" loading={songs.isFetching} loadingText="Searching…">Search</Button>
-          </form>
+          <div role="tablist" aria-label="Song source" className="mt-6 flex gap-3">
+            <Button
+              id="catalog-tab"
+              role="tab"
+              aria-controls="catalog-panel"
+              aria-selected={mode === "catalog"}
+              variant={mode === "catalog" ? "primary" : "secondary"}
+              onClick={() => setMode("catalog")}
+            >
+              Song catalog
+            </Button>
+            <Button
+              id="upload-tab"
+              role="tab"
+              aria-controls="upload-panel"
+              aria-selected={mode === "upload"}
+              variant={mode === "upload" ? "primary" : "secondary"}
+              onClick={() => setMode("upload")}
+            >
+              Upload MP3
+            </Button>
+          </div>
 
-          {songs.isPending && <p role="status">Loading songs…</p>}
+          <div
+            id="catalog-panel"
+            role="tabpanel"
+            aria-labelledby="catalog-tab"
+            hidden={mode !== "catalog"}
+          >
+            <form onSubmit={submitSearch} className="my-6 flex flex-wrap gap-3">
+              <label className="sr-only" htmlFor="song-search">Search song titles</label>
+              <Input
+                id="song-search"
+                maxLength={255}
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search song titles"
+                className="min-w-0 flex-1"
+              />
+              <Button type="submit" loading={songs.isFetching} loadingText="Searching…">Search</Button>
+            </form>
 
-          {songs.error && (
-            <div className="space-y-3">
-              <ErrorBanner message={errorMessage(songs.error)} />
-              <Button variant="secondary" onClick={() => void songs.refetch()}>Retry</Button>
+            {songs.isPending && <p role="status">Loading songs…</p>}
+
+            {songs.error && (
+              <div className="space-y-3">
+                <ErrorBanner message={errorMessage(songs.error)} />
+                <Button variant="secondary" onClick={() => void songs.refetch()}>Retry</Button>
+              </div>
+            )}
+
+            {songs.data?.length === 0 && <p className="text-muted">No ready songs found. Try another search.</p>}
+
+            {songs.data && songs.data.length > 0 && (
+              <ul className="my-4 grid gap-3 sm:grid-cols-2">
+                {songs.data.map((song) => {
+                  const isSelected = selected?.id === song.id;
+                  return (
+                    <li key={song.id}>
+                      <button
+                        type="button"
+                        disabled={game.pick.isPending}
+                        aria-pressed={isSelected}
+                        className={`h-full w-full rounded-xl border p-4 text-left transition-colors disabled:opacity-50 ${
+                          isSelected
+                            ? "border-primary bg-primary text-black"
+                            : "border-white/20 bg-white/5 hover:border-primary/70 hover:bg-white/10"
+                        }`}
+                        onClick={() => setSelected({ id: song.id, title: song.title })}
+                      >
+                        <span className="block font-semibold">{song.title}</span>
+                        <span className={`text-sm ${isSelected ? "text-black/70" : "text-muted"}`}>{song.artist}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+
+            <div className="mb-6 flex gap-3">
+              <Button
+                variant="secondary"
+                disabled={filter.offset === 0 || songs.isFetching}
+                onClick={() => changePage(Math.max(0, filter.offset - SONG_PAGE_SIZE))}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={songs.data?.length !== SONG_PAGE_SIZE || songs.isFetching}
+                onClick={() => changePage(filter.offset + SONG_PAGE_SIZE)}
+              >
+                Next
+              </Button>
             </div>
-          )}
+          </div>
 
-          {songs.data?.length === 0 && <p className="text-muted">No ready songs found. Try another search.</p>}
-
-          {songs.data && songs.data.length > 0 && (
-            <ul className="my-4 grid gap-3 sm:grid-cols-2">
-              {songs.data.map((song) => {
-                const isSelected = selected?.id === song.id;
-                return (
-                  <li key={song.id}>
-                    <button
-                      type="button"
-                      disabled={game.pick.isPending}
-                      aria-pressed={isSelected}
-                      className={`h-full w-full rounded-xl border p-4 text-left transition-colors disabled:opacity-50 ${
-                        isSelected
-                          ? "border-primary bg-primary text-black"
-                          : "border-white/20 bg-white/5 hover:border-primary/70 hover:bg-white/10"
-                      }`}
-                      onClick={() => setSelected({ id: song.id, title: song.title })}
-                    >
-                      <span className="block font-semibold">{song.title}</span>
-                      <span className={`text-sm ${isSelected ? "text-black/70" : "text-muted"}`}>{song.artist}</span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-
-          <div className="mb-6 flex gap-3">
-            <Button
-              variant="secondary"
-              disabled={filter.offset === 0 || songs.isFetching}
-              onClick={() => changePage(Math.max(0, filter.offset - SONG_PAGE_SIZE))}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="secondary"
-              disabled={songs.data?.length !== SONG_PAGE_SIZE || songs.isFetching}
-              onClick={() => changePage(filter.offset + SONG_PAGE_SIZE)}
-            >
-              Next
-            </Button>
+          <div
+            id="upload-panel"
+            role="tabpanel"
+            aria-labelledby="upload-tab"
+            hidden={mode !== "upload"}
+          >
+            <SongUploadPanel
+              onReady={(song) => {
+                setSelected(song);
+                setMode("catalog");
+              }}
+            />
           </div>
 
           {pickError && <div className="mb-4"><ErrorBanner message={errorMessage(pickError)} /></div>}

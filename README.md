@@ -100,7 +100,7 @@ Do not store the session token in local storage. The server stores only a hash a
 ```
 ## Adding songs
 
-Songs are uploaded through the protected songs endpoint. The request must be multipart form data and must include:
+Signed-in players can upload songs from the song-selection menu during a battle. Uploads enter the shared song catalog after background processing succeeds. The request uses multipart form data and must include:
 
 - `song`: the audio file
 - `title`: the song title
@@ -201,6 +201,8 @@ __The login and registration body fields are__:
 | POST | `/battles/:battleId/rounds/picks` |Pick a song |
 | POST | `/rounds/:roundId/guess` | Submit a guess |
 | GET | `/rounds/:roundId/audio` |Stream authorized round audio |
+| POST | `/songs` | Queue an authenticated MP3 upload |
+| GET | `/songs/:id/status` | Read authenticated processing status |
 
 > All battle and round routes require an authenticated session.
 

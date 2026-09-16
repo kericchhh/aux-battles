@@ -9,9 +9,9 @@ export const songSearchSchema = z.object({
 })
 
 export const songCreateSchema = z.object({
-    title: z.string().max(255),
-    artist: z.string().max(255),
-    genre: z.string().max(50),
+    title: z.string().trim().min(1).max(255),
+    artist: z.string().trim().min(1).max(255),
+    genre: z.string().trim().min(1).max(50),
     coverImage: z.string().optional(),
     album: z.string().max(255).optional(),
     duration: z.coerce.number().int().positive(),
