@@ -104,7 +104,6 @@ export default function SongUploadPanel({ onReady }: SongUploadPanelProps) {
       artist: artist.trim(),
       genre: genre.trim(),
       album: album.trim() || undefined,
-      duration: Math.max(1, Math.round(duration)),
       clipStartSeconds,
     });
   }
@@ -172,14 +171,17 @@ export default function SongUploadPanel({ onReady }: SongUploadPanelProps) {
       </div>
 
       {currentError && <ErrorBanner message={currentError} />}
-      {processingStatus === "PROCESSING" && (
+      {processingStatus === "PROCESSING" && processing.data?.workerAvailable !== false && (
         <p role="status" className="text-sm text-muted">Separating the song into stems…</p>
+      )}
+      {processingStatus === "PROCESSING" && processing.data?.workerAvailable === false && (
+        <ErrorBanner message="The song is queued, but the processing service is currently offline. Processing will resume automatically." />
       )}
       {processingStatus === "READY" && (
         <p role="status" className="text-sm text-green-300">Song ready and selected.</p>
       )}
       {processingStatus === "FAILED" && (
-        <ErrorBanner message="Song processing failed. Choose another file and try again." />
+        <ErrorBanner message={processing.data?.processingError ?? "Song processing failed. Choose another file and try again."} />
       )}
       {processing.error && (
         <Button variant="secondary" onClick={() => void processing.refetch()}>

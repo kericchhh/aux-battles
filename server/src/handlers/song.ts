@@ -7,21 +7,42 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import { db } from "../db/index.js";
 import { enqueueSongProcessing } from "../services/song-jobs.js";
+import { CLIP_DURATION_SECONDS, INCOMING_ROOT } from "../config/media.js";
+import { probeMp3, cleanProcessedSong, removeIncomingSong } from "../services/song-processing.js";
 
 export async function addSong(req: Request, res: Response) {
     if(!req.file){
         throw new AppError("Song file is required", 400)
     }
     const originalPath = path.resolve(req.file.path)
+    const songId = path.parse(req.file.filename).name.replace(/^v2-/, "");
     const result = songUploadSchema.safeParse(req.body)
     if(!result.success){
         await fs.rm(originalPath, {force: true});
         throw new AppError("Invalid fields", 400)
     }
     const { clipStartSeconds, ...metadata } = result.data
+    let duration: number;
+    try {
+        duration = (await probeMp3(originalPath)).duration;
+    } catch {
+        await fs.rm(originalPath, { force: true });
+        throw new AppError("Upload a valid MP3 file", 400);
+    }
+    if (duration - clipStartSeconds + 0.05 < CLIP_DURATION_SECONDS) {
+        await fs.rm(originalPath, { force: true });
+        throw new AppError(`The selected clip must contain ${CLIP_DURATION_SECONDS} seconds of audio`, 400);
+    }
+
     try{
         const created = await db.transaction(async (tx) => {
-            const song = await addSongQuery({ ...metadata, status: "PROCESSING"},tx)
+            const song = await addSongQuery({
+                id: songId,
+                ...metadata,
+                duration: Math.max(1, Math.round(duration)),
+                status: "PROCESSING",
+                processingError: null,
+            },tx)
             if (!song) {
                 throw new AppError("Could not create song", 500)
             }
@@ -59,5 +80,11 @@ export async function deleteSong(req: Request, res: Response) {
     const { id } = result.data
     const toDelete = await deleteSongQuery(id)
     if(!toDelete) throw new AppError("Could not delete song", 404)
+    await Promise.all([
+        cleanProcessedSong(id),
+        removeIncomingSong(path.join(INCOMING_ROOT, `v2-${id}.mp3`)),
+    ]).catch((error: unknown) => {
+        console.warn(`Song ${id} was deleted, but its media cleanup failed:`, error);
+    });
     res.json(toDelete)
 }

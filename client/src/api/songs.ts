@@ -13,6 +13,8 @@ export type SongProcessingStatus = {
   title: string;
   artist: string;
   status: "PROCESSING" | "READY" | "FAILED";
+  processingError: string | null;
+  workerAvailable: boolean | null;
 };
 
 export type SongUpload = {
@@ -21,7 +23,6 @@ export type SongUpload = {
   artist: string;
   genre: string;
   album?: string;
-  duration: number;
   clipStartSeconds: number;
 };
 
@@ -53,7 +54,6 @@ export function uploadSong(input: SongUpload) {
   body.set("title", input.title);
   body.set("artist", input.artist);
   body.set("genre", input.genre);
-  body.set("duration", String(input.duration));
   body.set("clipStartSeconds", String(input.clipStartSeconds));
   if (input.album) body.set("album", input.album);
 

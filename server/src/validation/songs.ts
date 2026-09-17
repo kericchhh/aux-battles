@@ -20,4 +20,6 @@ export const songCreateSchema = z.object({
 
 export const songPatchSchema = songCreateSchema.partial()
 
-export const songUploadSchema = songCreateSchema.omit({status: true}).extend({clipStartSeconds: z.coerce.number().min(0)});
+export const songUploadSchema = songCreateSchema.omit({ status: true, duration: true }).extend({
+    clipStartSeconds: z.coerce.number().min(0),
+});

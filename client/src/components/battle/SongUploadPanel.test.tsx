@@ -48,6 +48,8 @@ describe("SongUploadPanel", () => {
       title: "Test Song",
       artist: "Test Artist",
       status: "READY",
+      processingError: null,
+      workerAvailable: null,
     });
 
     const file = new File(["audio"], "test.mp3", { type: "audio/mpeg" });
@@ -70,12 +72,37 @@ describe("SongUploadPanel", () => {
         title: "Test Song",
         artist: "Test Artist",
         genre: "Rock",
-        duration: 60,
         clipStartSeconds: 15,
       }), expect.any(Object));
       expect(onReady).toHaveBeenCalledWith({ id: "song-1", title: "Test Song" });
     });
 
     expect(screen.getByText("Song ready and selected.")).toBeVisible();
+  });
+
+  it("explains when an uploaded song is queued without an available worker", async () => {
+    const user = userEvent.setup();
+    renderPanel();
+    uploadMock.mockResolvedValue({ id: "song-2", status: "PROCESSING" });
+    statusMock.mockResolvedValue({
+      id: "song-2",
+      title: "Queued Song",
+      artist: "Test Artist",
+      status: "PROCESSING",
+      processingError: null,
+      workerAvailable: false,
+    });
+
+    const file = new File(["audio"], "queued.mp3", { type: "audio/mpeg" });
+    await user.upload(screen.getByLabelText("Upload MP3 file"), file);
+    const audio = document.querySelector("audio");
+    Object.defineProperty(audio!, "duration", { configurable: true, value: 60 });
+    fireEvent.loadedMetadata(audio!);
+    await user.type(screen.getByPlaceholderText("Title"), "Queued Song");
+    await user.type(screen.getByPlaceholderText("Artist"), "Test Artist");
+    await user.type(screen.getByPlaceholderText("Genre"), "Rock");
+    await user.click(screen.getByRole("button", { name: "Upload and process" }));
+
+    expect(await screen.findByText(/processing service is currently offline/i)).toBeVisible();
   });
 });

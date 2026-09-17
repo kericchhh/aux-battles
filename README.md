@@ -48,6 +48,10 @@ npm run dev
 ```code
 npm run worker
 ```
+#### Or start both development processes together:
+```code
+npm run dev:all
+```
 #### The API runs at http://localhost:5000.
 
 ## Database migrations
@@ -106,8 +110,9 @@ Signed-in players can upload songs from the pre-game lineup menu. Uploads enter 
 - `title`: the song title
 - `artist`: the artist name
 - `genre`: the genre
-- `duration`: the source duration in seconds
 - `clipStartSeconds`: where the 12-second game clip should begin
+
+The API uses ffprobe to verify the MP3 and calculate its duration instead of trusting browser metadata.
 
 Example using cURL:
 
@@ -117,7 +122,6 @@ curl -X POST http://localhost:5000/songs \
   -F "title=Example Song" \
   -F "artist=Example Artist" \
   -F "genre=Rock" \
-  -F "duration=180" \
   -F "clipStartSeconds=30" \
   -F "song=@/absolute/path/to/example.mp3"
 ```
@@ -159,6 +163,19 @@ melodyPath
 vocalsPath
 ```
 Make sure the API and worker can both create and read the configured media directory. The default is `storage/` in the repository root and can be changed with `MEDIA_ROOT`.
+
+The worker publishes a database heartbeat while it is available. Upload status responses use that heartbeat to distinguish active processing from a queued upload waiting for the worker. Temporary work and orphaned media are cleaned conservatively by the worker.
+
+Ready songs remain in the shared catalog until an administrator deletes their song record. Administrative deletion also removes that song's generated media directory.
+
+Audit stored catalog paths and processing jobs without changing data:
+```code
+npm run media:audit
+```
+Mark songs with missing files, legacy paths, or abandoned processing jobs as failed while preserving their metadata and battle references:
+```code
+npm run media:cleanup
+```
 ## Authentication flow
 
 1. POST /users/register creates an account.

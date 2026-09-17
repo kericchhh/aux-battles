@@ -14,6 +14,12 @@ export const sessionsTable = pgTable("sessions", {
     ]
 )
 
+export const workerHeartbeatsTable = pgTable("worker_heartbeats", {
+    name: varchar("name", { length: 64 }).primaryKey(),
+    instanceId: uuid("instance_id").notNull(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull(),
+})
+
 export const usersTable = pgTable("users", {
     id: uuid("id").primaryKey().defaultRandom(),
     username: varchar("username", { length: 30 }).notNull().unique(),
@@ -52,6 +58,7 @@ export const songsTable = pgTable("songs", {
     album: varchar("album", { length: 255 }),
     duration: integer("duration").notNull(),
     status: songStatus().default("PROCESSING").notNull(),
+    processingError: varchar("processing_error", { length: 500 }),
     fullSongPath: varchar("full_song_path", { length: 255 }),
     drumsPath: varchar("drums_path", { length: 255 }),
     bassPath: varchar("bass_path", { length: 255 }),

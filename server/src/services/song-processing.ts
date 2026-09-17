@@ -53,25 +53,51 @@ async function validateInputPath(originalPath: string) {
     return input;
 }
 
-export async function probeAudioDuration(
+export interface Mp3ProbeResult {
+    duration: number;
+}
+
+export async function probeMp3(
     inputPath: string,
     signal?: AbortSignal,
-): Promise<number> {
+): Promise<Mp3ProbeResult> {
     const output = await runProcess(FFPROBE_BIN, [
         "-v",
         "error",
         "-show_entries",
-        "format=duration",
+        "format=duration,format_name:stream=codec_type,codec_name",
         "-of",
-        "default=noprint_wrappers=1:nokey=1",
+        "json",
         inputPath,
     ], signal);
-    const duration = Number(output.trim());
 
-    if (!Number.isFinite(duration) || duration <= 0) {
-        throw new Error("Could not determine song duration");
+    let result: {
+        format?: { duration?: string; format_name?: string };
+        streams?: { codec_type?: string; codec_name?: string }[];
+    };
+    try {
+        result = JSON.parse(output);
+    } catch {
+        throw new Error("Could not read audio metadata");
     }
-    return duration;
+
+    const duration = Number(result.format?.duration);
+    const formats = result.format?.format_name?.split(",") ?? [];
+    const hasMp3Stream = result.streams?.some(
+        (stream) => stream.codec_type === "audio" && stream.codec_name === "mp3",
+    );
+
+    if (!Number.isFinite(duration) || duration <= 0 || !formats.includes("mp3") || !hasMp3Stream) {
+        throw new Error("The uploaded file is not valid MP3 audio");
+    }
+    return { duration };
+}
+
+export async function probeAudioDuration(
+    inputPath: string,
+    signal?: AbortSignal,
+): Promise<number> {
+    return (await probeMp3(inputPath, signal)).duration;
 }
 
 export async function extractAudioClip(

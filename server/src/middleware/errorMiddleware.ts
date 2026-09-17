@@ -1,5 +1,6 @@
 import type { ErrorRequestHandler } from "express";
 import { ZodError } from "zod";
+import multer from "multer";
 import { AppError } from "../utils/AppError.js";
 
 function databaseCode(error: unknown, depth = 0): string | undefined {
@@ -11,6 +12,13 @@ export const errorHandler: ErrorRequestHandler = (error, req, res, next) => {
   if (res.headersSent) { next(error); return; }
   if (error instanceof ZodError) {
     res.status(400).json({ message: "Invalid input", issues: error.issues.map(({ path, message }) => ({ path, message })) });
+    return;
+  }
+  if (error instanceof multer.MulterError) {
+    const tooLarge = error.code === "LIMIT_FILE_SIZE";
+    res.status(tooLarge ? 413 : 400).json({
+      message: tooLarge ? "MP3 files must be 30 MB or smaller" : "Invalid song upload",
+    });
     return;
   }
   if (error instanceof AppError) { res.status(error.statusCode).json({ message: error.message }); return; }

@@ -6,7 +6,11 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "tsx watch src/server.ts",
+    "dev:all": "tsx src/dev-all.ts",
     "worker": "tsx src/worker.ts",
+    "worker:watch": "tsx watch src/worker.ts",
+    "media:audit": "tsx src/scripts/audit-media.ts",
+    "media:cleanup": "tsx src/scripts/audit-media.ts --apply",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [],

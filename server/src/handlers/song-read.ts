@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { z } from "zod";
 import { getSongById, getSongs, getSongCatalogById, searchSong } from "../db/queries/songs.js";
 import { AppError } from "../utils/AppError.js";
+import { getSongWorkerHealth } from "../services/worker-health.js";
 
 const pagination = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
@@ -26,6 +27,9 @@ export async function getSongStatus(req: Request, res: Response) {
   const id = z.string().uuid().parse(req.params.id);
   const song = await getSongById(id);
   if (!song) throw new AppError("Song not found", 404);
+  const worker = song.status === "PROCESSING"
+    ? await getSongWorkerHealth()
+    : null;
 
   res.setHeader("Cache-Control", "no-store");
   res.json({
@@ -33,5 +37,7 @@ export async function getSongStatus(req: Request, res: Response) {
     title: song.title,
     artist: song.artist,
     status: song.status,
+    processingError: song.processingError,
+    workerAvailable: worker?.available ?? null,
   });
 }

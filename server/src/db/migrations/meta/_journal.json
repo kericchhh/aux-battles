@@ -57,6 +57,13 @@
       "when": 1789557398961,
       "tag": "0007_pregame_lineups",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789644738231,
+      "tag": "0008_worker_observability",
+      "breakpoints": true
     }
   ]
 }
