@@ -2,8 +2,14 @@
 
 Aux Battles is a real-time music guessing game. A host creates a battle, shares an invite code, and an opponent joins from a separate account. Players pick songs and take turns guessing the song title across several rounds.
 
+## Legal notice
+
+Aux Battles is provided for personal, educational, and evaluation purposes only. It is not authorized for commercial operation, monetization, or the public distribution of third-party music.
+This repository does not grant any right to upload, copy, modify, separate into stems, stream, perform, or otherwise use music or other third-party content. Users and operators are solely responsible for ensuring that they have all permissions and licences required for every work, sound recording, and performance they use. Only use content that you created, that is in the public domain, or that is covered by a licence which expressly permits the intended use.
+The project is not affiliated with or endorsed by any artist, label, publisher, or rights holder. This notice is provided for general information and is not legal advice.
 ## Table of contents
 
+- [Legal notice](#legal-notice)
 - [Project structure](#project-structure)
 - [Requirements](#requirements)
 - [Backend setup](#backend-setup)
