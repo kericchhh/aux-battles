@@ -1,5 +1,6 @@
+import type { Issue } from "@/lib/types/api";
+
 export const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/$/, "")
-export type Issue = { path: (string | number)[]; message: string}
 export class ApiError extends Error {
     status: number;
     issues: Issue[];

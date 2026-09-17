@@ -1,11 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
-import { errorMessage } from "../api/client";
-import { getProfile } from "../api/profile";
-import ErrorBanner from "../components/ErrorBanner";
-import LoadingState from "../components/LoadingState";
-import PageShell from "../components/PageShell";
-import { queryKeys } from "../lib/queryKeys";
+import { errorMessage } from "@/api/client";
+import { getProfile } from "@/api/profile";
+import ErrorBanner from "@/components/ErrorBanner";
+import LoadingState from "@/components/LoadingState";
+import PageShell from "@/components/PageShell";
+import { queryKeys } from "@/lib/queryKeys";
 
 export default function Profile() {
   const { id } = useParams();

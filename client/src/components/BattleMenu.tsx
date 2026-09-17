@@ -1,8 +1,8 @@
 import { useState, type SyntheticEvent } from "react";
 import { ArrowRight, Link2, Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { createBattle, joinBattle } from "../api/battles";
-import { errorMessage } from "../api/client";
+import { createBattle, joinBattle } from "@/api/battles";
+import { errorMessage } from "@/api/client";
 import Button from "./Button";
 import ErrorBanner from "./ErrorBanner";
 import Input from "./Inputs";

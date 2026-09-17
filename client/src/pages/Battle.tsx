@@ -1,17 +1,17 @@
 import { Link, useParams } from "react-router-dom";
-import { errorMessage } from "../api/client";
-import BattleHeader from "../components/battle/BattleHeader";
-import BattlePhase from "../components/battle/BattlePhase";
-import ScoreBoard from "../components/battle/ScoreBoard";
-import Button from "../components/Button";
-import ErrorBanner from "../components/ErrorBanner";
-import LoadingState from "../components/LoadingState";
-import PageShell from "../components/PageShell";
-import { useAuth } from "../context/auth-context";
-import { useBattle } from "../hooks/useBattle";
-import { useSocket } from "../hooks/useSocket";
+import { errorMessage } from "@/api/client";
+import BattleHeader from "@/components/battle/BattleHeader";
+import BattlePhase from "@/components/battle/BattlePhase";
+import ScoreBoard from "@/components/battle/ScoreBoard";
+import Button from "@/components/Button";
+import ErrorBanner from "@/components/ErrorBanner";
+import LoadingState from "@/components/LoadingState";
+import PageShell from "@/components/PageShell";
+import { useAuth } from "@/context/auth-context";
+import { useBattle } from "@/hooks/useBattle";
+import { useSocket } from "@/hooks/useSocket";
+import { UUID_PATTERN } from "@/lib/constants/battle";
 
-const UUID_PATTERN = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 
 export default function Battle() {
   const { battleId } = useParams();

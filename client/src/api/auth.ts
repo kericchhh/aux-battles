@@ -1,6 +1,6 @@
 import { apiFetch, ApiError } from "./client";
+import type { User } from "@/lib/types/auth";
 
-export type User = { id: string; username: string; email: string };
 export const register = (data: {username: string; email: string; password: string}) =>
     apiFetch<User>("/users/register", {method: "POST", body: JSON.stringify(data)})
 

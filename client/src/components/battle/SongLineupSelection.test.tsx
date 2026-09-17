@@ -2,12 +2,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { BattleView } from "../../api/battles";
-import { getSongs } from "../../api/songs";
-import type { BattleGame } from "../../hooks/useBattle";
+import { getSongs } from "@/api/songs";
+import type { BattleGame } from "@/hooks/useBattle";
+import type { BattleView } from "@/lib/types/battle";
 import SongLineupSelection from "./SongLineupSelection";
 
-vi.mock("../../api/songs", () => ({
+vi.mock("@/api/songs", () => ({
   SONG_PAGE_SIZE: 20,
   getSongs: vi.fn(),
 }));

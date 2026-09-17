@@ -1,8 +1,8 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import type { BattleRound } from "../../api/battles";
-import type { BattleGame } from "../../hooks/useBattle";
+import type { BattleGame } from "@/hooks/useBattle";
+import type { BattleRound } from "@/lib/types/battle";
 import GuessingPanel from "./GuessingPanel";
 
 vi.mock("./AudioPlayer", () => ({

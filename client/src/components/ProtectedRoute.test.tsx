@@ -7,10 +7,10 @@ import {
   useLocation,
 } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useAuth } from "../context/auth-context";
+import { useAuth } from "@/context/auth-context";
 import ProtectedRoute from "./ProtectedRoute";
 
-vi.mock("../context/auth-context", () => ({
+vi.mock("@/context/auth-context", () => ({
   useAuth: vi.fn(),
 }));
 

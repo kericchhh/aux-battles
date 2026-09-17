@@ -1,5 +1,5 @@
-import type { BattleView } from "../../api/battles";
-import type { BattleGame } from "../../hooks/useBattle";
+import type { BattleGame } from "@/hooks/useBattle";
+import type { BattleView } from "@/lib/types/battle";
 import Button from "../Button";
 import Panel from "../Panel";
 import BattleResult from "./BattleResult";

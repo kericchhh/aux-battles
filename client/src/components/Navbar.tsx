@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AudioLines, House, LogOut, UserRound } from "lucide-react";
-import { useAuth } from "../context/auth-context";
+import { useAuth } from "@/context/auth-context";
 
 const navAction = "inline-flex min-h-10 items-center gap-2 rounded-xl border border-transparent px-3 py-2 text-sm text-muted transition-colors hover:bg-white/5 hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50";
 

@@ -1,7 +1,7 @@
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { BattleRound } from "../../api/battles";
+import type { BattleRound } from "@/lib/types/battle";
 import AudioPlayer from "./AudioPlayer";
 
 const waveMock = vi.hoisted(() => ({

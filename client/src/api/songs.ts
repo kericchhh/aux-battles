@@ -1,32 +1,6 @@
 import { apiFetch } from "./client";
-
-export type Song = {
-  id: string;
-  title: string;
-  artist: string;
-  genre: string;
-  duration: number;
-};
-
-export type SongProcessingStatus = {
-  id: string;
-  title: string;
-  artist: string;
-  status: "PROCESSING" | "READY" | "FAILED";
-  processingError: string | null;
-  workerAvailable: boolean | null;
-};
-
-export type SongUpload = {
-  file: File;
-  title: string;
-  artist: string;
-  genre: string;
-  album?: string;
-  clipStartSeconds: number;
-};
-
-export const SONG_PAGE_SIZE = 20;
+import { SONG_PAGE_SIZE } from "@/lib/constants/songs";
+import type { Song, SongUpload, SongProcessingStatus } from "@/lib/types/songs";
 
 export function getSongs(
   query: string,

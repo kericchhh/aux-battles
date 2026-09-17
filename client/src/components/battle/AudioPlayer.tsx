@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import WaveSurfer from "wavesurfer.js";
 import { LoaderCircle, Pause, Play, RotateCw, Volume2, VolumeX } from "lucide-react";
-import { API_URL } from "../../api/client";
-import type { BattleRound } from "../../api/battles";
+import { API_URL } from "@/api/client";
+import type { BattleRound } from "@/lib/types/battle";
 import Button from "../Button";
 import ErrorBanner from "../ErrorBanner";
 
@@ -104,7 +104,7 @@ export default function AudioPlayer({ round }: { round: BattleRound }) {
         </button>
 
         <div className="min-w-0 flex-1">
-          <div ref={waveformRef} aria-label="Interactive audio waveform" className="h-[58px] w-full overflow-hidden" />
+          <div ref={waveformRef} aria-label="Interactive audio waveform" className="h-14 w-full overflow-hidden" />
           <div className="mt-1 flex justify-between text-xs tabular-nums text-muted" aria-live="off">
             <span>{formatTime(currentTime)}</span>
             <span>{formatTime(duration)}</span>

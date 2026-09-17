@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
-import { errorMessage } from "../../api/client";
-import type { BattleRound } from "../../api/battles";
-import type { BattleGame } from "../../hooks/useBattle";
+import { errorMessage } from "@/api/client";
+import type { BattleGame } from "@/hooks/useBattle";
+import type { BattleRound } from "@/lib/types/battle";
 import Button from "../Button";
 import ErrorBanner from "../ErrorBanner";
 import Input from "../Inputs";

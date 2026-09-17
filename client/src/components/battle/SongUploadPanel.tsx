@@ -1,17 +1,13 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  getSongStatus,
-  uploadSong,
-  type SongProcessingStatus,
-} from "../../api/songs";
-import { errorMessage } from "../../api/client";
-import { queryKeys } from "../../lib/queryKeys";
+import { errorMessage } from "@/api/client";
+import { getSongStatus, uploadSong } from "@/api/songs";
+import { CLIP_DURATION_SECONDS } from "@/lib/constants/songs";
+import { queryKeys } from "@/lib/queryKeys";
+import type { SongProcessingStatus } from "@/lib/types/songs";
 import Button from "../Button";
 import ErrorBanner from "../ErrorBanner";
 import Input from "../Inputs";
-
-const CLIP_DURATION_SECONDS = 12;
 
 interface SongUploadPanelProps {
   onReady: (song: Pick<SongProcessingStatus, "id" | "title">) => void;

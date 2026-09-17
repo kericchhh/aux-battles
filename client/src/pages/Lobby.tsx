@@ -1,12 +1,6 @@
-import { Headphones, Music2, Zap } from "lucide-react";
-import BattleMenu from "../components/BattleMenu";
-import { useAuth } from "../context/auth-context";
-
-const features = [
-  { Icon: Music2, title: "Choose your tracks", text: "Build a non trivial lineup to crush your opponent." },
-  { Icon: Headphones, title: "Listen layer by layer", text: "Hear the song evolve as every guess reveals more." },
-  { Icon: Zap, title: "Score fast", text: "Guess it early to claim the most points." },
-];
+import BattleMenu from "@/components/BattleMenu";
+import { useAuth } from "@/context/auth-context";
+import { features } from "@/lib/constants/lobby";
 
 export default function Lobby() {
   const { user } = useAuth();

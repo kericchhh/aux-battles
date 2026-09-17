@@ -1,4 +1,4 @@
-import type { BattleView } from "../../api/battles";
+import type { BattleView } from "@/lib/types/battle";
 import Panel from "../Panel";
 
 type ScoreBoardProps = Pick<BattleView, "myScore" | "opponentScore" | "opponentJoined" | "previousRound">;

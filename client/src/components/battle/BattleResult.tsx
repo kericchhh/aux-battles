@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import type { BattleView } from "../../api/battles";
+import type { BattleView } from "@/lib/types/battle";
 import { buttonStyles } from "../buttonStyles";
 import Panel from "../Panel";
 

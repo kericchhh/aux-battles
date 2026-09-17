@@ -7,9 +7,9 @@ import {
   useQueryClient,
   type QueryClient,
 } from "@tanstack/react-query";
-import * as auth from "../api/auth";
-import type { User } from "../api/auth";
-import { queryKeys } from "../lib/queryKeys";
+import * as auth from "@/api/auth";
+import { queryKeys } from "@/lib/queryKeys";
+import type { User } from "@/lib/types/auth";
 import { AuthContext } from "./auth-context";
 
 function replaceCachedUser(cache: QueryClient, user: User | null) {

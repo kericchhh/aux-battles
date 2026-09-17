@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { errorMessage } from "../api/client";
-import { register } from "../api/auth";
-import AuthFormLayout from "../components/AuthFormLayout";
-import ErrorBanner from "../components/ErrorBanner";
-import Input from "../components/Inputs";
-import Button from "../components/Button";
+import { register } from "@/api/auth";
+import { errorMessage } from "@/api/client";
+import AuthFormLayout from "@/components/AuthFormLayout";
+import Button from "@/components/Button";
+import ErrorBanner from "@/components/ErrorBanner";
+import Input from "@/components/Inputs";
 
 export default function Register() {
     const [username, setUsername] = useState("");

@@ -1,11 +1,13 @@
 import { useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Search, X } from "lucide-react";
-import type { BattleView } from "../../api/battles";
-import { errorMessage } from "../../api/client";
-import { getSongs, SONG_PAGE_SIZE, type Song } from "../../api/songs";
-import type { BattleGame } from "../../hooks/useBattle";
-import { queryKeys } from "../../lib/queryKeys";
+import { errorMessage } from "@/api/client";
+import { getSongs } from "@/api/songs";
+import type { BattleGame } from "@/hooks/useBattle";
+import { SONG_PAGE_SIZE } from "@/lib/constants/songs";
+import { queryKeys } from "@/lib/queryKeys";
+import type { BattleView } from "@/lib/types/battle";
+import type { Song } from "@/lib/types/songs";
 import Button from "../Button";
 import ErrorBanner from "../ErrorBanner";
 import Input from "../Inputs";

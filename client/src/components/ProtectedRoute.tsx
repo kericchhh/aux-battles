@@ -3,7 +3,7 @@ import {
   Navigate,
   useLocation,
 } from "react-router-dom";
-import { useAuth } from "../context/auth-context";
+import { useAuth } from "@/context/auth-context";
 import Button from "./Button";
 import LoadingState from "./LoadingState";
 

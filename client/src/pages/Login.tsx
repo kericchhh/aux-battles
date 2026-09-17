@@ -4,12 +4,12 @@ import {
   useLocation,
   useNavigate,
 } from "react-router-dom";
-import { errorMessage } from "../api/client";
-import AuthFormLayout from "../components/AuthFormLayout";
-import Button from "../components/Button";
-import ErrorBanner from "../components/ErrorBanner";
-import Input from "../components/Inputs";
-import { useAuth } from "../context/auth-context";
+import { errorMessage } from "@/api/client";
+import AuthFormLayout from "@/components/AuthFormLayout";
+import Button from "@/components/Button";
+import ErrorBanner from "@/components/ErrorBanner";
+import Input from "@/components/Inputs";
+import { useAuth } from "@/context/auth-context";
 
 interface LoginLocationState {
   from?: string;
@@ -18,18 +18,10 @@ interface LoginLocationState {
 }
 
 export default function Login() {
-  const [identifier, setIdentifier] =
-    useState("");
-
-  const [password, setPassword] =
-    useState("");
-
-  const [error, setError] =
-    useState<string | null>(null);
-
-  const [loading, setLoading] =
-    useState(false);
-
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();

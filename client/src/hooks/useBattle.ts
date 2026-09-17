@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import * as api from "../api/battles";
-import { queryKeys } from "../lib/queryKeys";
+import * as api from "@/api/battles";
+import { queryKeys } from "@/lib/queryKeys";
 export function useBattle(battleId: string, userId: string) {
   const cache = useQueryClient();
   const queryKey = queryKeys.battle(userId, battleId);

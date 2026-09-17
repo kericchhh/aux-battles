@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { io } from "socket.io-client";
-import { API_URL } from "../api/client";
-import { queryKeys } from "../lib/queryKeys";
+import { API_URL } from "@/api/client";
+import { queryKeys } from "@/lib/queryKeys";
 export function useSocket(battleId: string, userId: string) {
   const cache = useQueryClient();
   const [connection, setConnection] = useState("Connecting…");
