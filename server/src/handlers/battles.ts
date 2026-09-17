@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import * as game from "../services/game.js";
-import { battleParams, createBattleInput, joinBattleInput, pickSongInput } from "../validation/game.js";
+import { battleParams, createBattleInput, joinBattleInput, lineupInput } from "../validation/game.js";
 import { AppError } from "../utils/AppError.js";
 import { notifyBattleChanged } from "../services/game-events.js";
 
@@ -29,10 +29,10 @@ export async function getLobby(req: Request, res: Response) {
 
 export const getBattleByIdHandler = getLobby;
 
-export async function pickSong(req: Request, res: Response) {
+export async function submitLineup(req: Request, res: Response) {
   const { battleId } = battleParams.parse(req.params);
-  const input = pickSongInput.parse(req.body);
-  const result = await game.pickSong(battleId, userId(req), input.roundId, input.songId);
+  const input = lineupInput.parse(req.body);
+  const result = await game.submitLineup(battleId, userId(req), input.songIds);
   notifyBattleChanged(battleId);
   res.json(result);
 }

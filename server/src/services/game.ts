@@ -1,11 +1,12 @@
 import { db } from "../db/index.js";
+import fs from "node:fs/promises";
 import type { Transaction } from "../db/types.js";
 import * as battles from "../db/queries/battles.js";
 import * as rounds from "../db/queries/rounds.js";
 import * as songs from "../db/queries/songs.js";
 import { AppError } from "../utils/AppError.js";
 import { isCloseMatch } from "../utils/fuzzyMatch.js";
-import { createBattleInput, joinBattleInput, pickSongInput, guessInput } from "../validation/game.js";
+import { createBattleInput, joinBattleInput, lineupInput, guessInput } from "../validation/game.js";
 
 type Battle = NonNullable<Awaited<ReturnType<typeof battles.getBattleById>>>;
 type Round = NonNullable<Awaited<ReturnType<typeof rounds.getRoundById>>>;
@@ -55,31 +56,93 @@ export async function joinBattle(code: string, userId: string) {
     return db.transaction(async (tx) => {
         const existing = required(await battles.getBattleByInvite(inviteCode,tx), "Battle not found", 404)
         const battle = required(await battles.joinBattle(existing.id, userId, tx), "Lobby is full, already started or belongs to you")
-        required(await rounds.createRound({battleId: battle.id, roundNumber: 1, status: "SONG_PICKS"}, tx), "Could not create round")
+        const createdRounds = await rounds.createRounds(
+          Array.from({ length: battle.rounds }, (_, index) => ({
+            battleId: battle.id,
+            roundNumber: index + 1,
+            status: "WAITING" as const,
+          })),
+          tx,
+        );
+        if (createdRounds.length !== battle.rounds) {
+          throw new AppError("Could not prepare battle rounds", 500);
+        }
         return {id: battle.id};
     })
 }
 
-export async function pickSong(battleId: string, userId: string, roundId: string, songId: string) {
-  pickSongInput.parse({ roundId, songId });
+async function hasCompleteAudio(song: Awaited<ReturnType<typeof songs.getSongsForShare>>[number]) {
+  const paths = [
+    song.fullSongPath,
+    song.drumsPath,
+    song.bassPath,
+    song.melodyPath,
+    song.vocalsPath,
+  ];
+  if (paths.some((audioPath) => !audioPath)) return false;
+
+  try {
+    const stats = await Promise.all(paths.map((audioPath) => fs.stat(audioPath!)));
+    return stats.every((stat) => stat.isFile() && stat.size > 0);
+  } catch {
+    return false;
+  }
+}
+
+export async function submitLineup(battleId: string, userId: string, songIds: string[]) {
+  const input = lineupInput.parse({ songIds });
   return db.transaction(async (tx) => {
     const battle = await lockBattle(battleId, userId, tx);
-    const round = await lockActiveRound(battle, roundId, tx);
-    if (round.status !== "SONG_PICKS") throw new AppError("Song selection has ended", 409);
-    const isHost = battle.hostId === userId;
-    if (isHost ? round.hostSongId : round.guestSongId) throw new AppError("You already picked a song", 409);
-    const song = required(await songs.getSongForShare(songId, tx), "Song not found", 404);
-    if (song.status !== "READY") throw new AppError("Song is not ready", 409);
-    if (!song.fullSongPath || !song.drumsPath || !song.bassPath || !song.melodyPath) {
-      throw new AppError("Song audio is incomplete", 409);
+    if (battle.status !== "SELECTING") {
+      throw new AppError("This battle is not accepting lineups", 409);
     }
-    const hostSongId = isHost ? songId : round.hostSongId;
-    const guestSongId = isHost ? round.guestSongId : songId;
-    const started = Boolean(hostSongId && guestSongId);
-    required(await rounds.updateRoundSelection(round.id, {
-      hostSongId, guestSongId, status: started ? "GUESSING" : "SONG_PICKS",
-    }, tx), "Song selection changed");
-    return { battleId, roundId, status: started ? "ROUND_STARTED" as const : "WAITING_ON_OPPONENT" as const };
+    if (input.songIds.length !== battle.rounds) {
+      throw new AppError(`Choose exactly ${battle.rounds} songs`, 400);
+    }
+
+    const battleRounds = await rounds.getRoundsForUpdate(battle.id, tx);
+    if (battleRounds.length !== battle.rounds) {
+      throw new AppError("Battle rounds are incomplete", 409);
+    }
+
+    const isHost = battle.hostId === userId;
+    const side = isHost ? "host" : "guest";
+    const alreadyLocked = battleRounds.every((round) =>
+      Boolean(isHost ? round.hostSongId : round.guestSongId)
+    );
+    if (alreadyLocked) throw new AppError("Your lineup is already locked", 409);
+
+    const selectedSongs = await songs.getSongsForShare(input.songIds, tx);
+    const songsById = new Map(selectedSongs.map((song) => [song.id, song]));
+    for (const songId of input.songIds) {
+      const song = songsById.get(songId);
+      if (!song) throw new AppError("A selected song was not found", 404);
+      if (song.status !== "READY") throw new AppError(`${song.title} is not ready`, 409);
+      if (!await hasCompleteAudio(song)) throw new AppError(`${song.title} has incomplete audio`, 409);
+    }
+
+    for (const [index, round] of battleRounds.entries()) {
+      const songId = required(input.songIds[index], "Lineup is incomplete", 400);
+      required(
+        await rounds.setRoundSong(round.id, side, songId, tx),
+        "Could not save lineup",
+        500,
+      );
+    }
+
+    const opponentLocked = battleRounds.every((round) =>
+      Boolean(isHost ? round.guestSongId : round.hostSongId)
+    );
+    if (opponentLocked) {
+      const firstRound = required(battleRounds[0], "First round is missing", 500);
+      required(await rounds.activateRound(firstRound.id, tx), "Could not start first round", 500);
+      required(await battles.startBattle(battle.id, tx), "Battle state changed", 409);
+    }
+
+    return {
+      battleId,
+      status: opponentLocked ? "BATTLE_STARTED" as const : "WAITING_ON_OPPONENT" as const,
+    };
   });
 }
 
@@ -87,9 +150,11 @@ async function advanceOrFinishBattle(battle: Battle, tx: Transaction) {
   if (battle.currentRound < battle.rounds) {
     const updated = required(await battles.advanceBattle(battle.id, battle.currentRound, tx),
       "Battle was already advanced");
-    required(await rounds.createRound({
-      battleId: battle.id, roundNumber: updated.currentRound, status: "SONG_PICKS",
-    }, tx), "Could not create next round", 500);
+    const nextRound = required(
+      await rounds.getCurrentRoundForUpdate(battle.id, updated.currentRound, tx),
+      "Next round is missing",
+    );
+    required(await rounds.activateRound(nextRound.id, tx), "Next round is not ready", 409);
     return updated;
   }
   const allRounds = await rounds.getRoundByBattleId(battle.id, tx);
@@ -153,8 +218,6 @@ function playerRound(round: Round, isHost: boolean, attempts: number) {
     myPoints: isHost ? round.hostPoints : round.guestPoints,
     myFinished: isHost ? round.hostFinished : round.guestFinished,
     opponentFinished: isHost ? round.guestFinished : round.hostFinished,
-    myHasPicked: Boolean(isHost ? round.hostSongId : round.guestSongId),
-    opponentHasPicked: Boolean(isHost ? round.guestSongId : round.hostSongId),
     myAttempts: attempts,
   };
 }
@@ -165,17 +228,25 @@ export async function getBattleView(battleId: string, userId: string) {
     const allRounds = await rounds.getRoundByBattleId(battle.id, tx);
     const current = allRounds.find((round) => round.roundNumber === battle.currentRound);
     const isHost = battle.hostId === userId;
-    const attempts = current ? await rounds.getGuessCount(current.id, userId, tx) : 0;
+    const attempts = current?.status === "GUESSING" ? await rounds.getGuessCount(current.id, userId, tx) : 0;
     const previous = [...allRounds].reverse().find((round) => round.status === "FINISHED");
+    const myLineupLocked = allRounds.length === battle.rounds && allRounds.every((round) =>
+      Boolean(isHost ? round.hostSongId : round.guestSongId)
+    );
+    const opponentLineupLocked = allRounds.length === battle.rounds && allRounds.every((round) =>
+      Boolean(isHost ? round.guestSongId : round.hostSongId)
+    );
     return {
       id: battle.id, status: battle.status, inviteCode: battle.inviteCode,
       currentRound: battle.currentRound, rounds: battle.rounds,
       opponentJoined: battle.guestId !== null,
+      myLineupLocked,
+      opponentLineupLocked,
       outcome: battle.status !== "FINISHED" ? null : battle.winnerId === null ? "DRAW" as const
         : battle.winnerId === userId ? "WIN" as const : "LOSS" as const,
       myScore: allRounds.reduce((sum, round) => sum + (isHost ? round.hostPoints : round.guestPoints), 0),
       opponentScore: allRounds.reduce((sum, round) => sum + (isHost ? round.guestPoints : round.hostPoints), 0),
-      round: current ? playerRound(current, isHost, attempts) : null,
+      round: battle.status === "ONGOING" && current ? playerRound(current, isHost, attempts) : null,
       previousRound: previous ? {
         number: previous.roundNumber,
         myPoints: isHost ? previous.hostPoints : previous.guestPoints,

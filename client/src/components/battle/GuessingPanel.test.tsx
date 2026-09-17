@@ -17,8 +17,6 @@ const round: BattleRound = {
   myPoints: 0,
   myFinished: false,
   opponentFinished: false,
-  myHasPicked: true,
-  opponentHasPicked: true,
   myAttempts: 1,
 };
 

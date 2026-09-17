@@ -5,7 +5,7 @@ import Panel from "../Panel";
 import BattleResult from "./BattleResult";
 import GuessingPanel from "./GuessingPanel";
 import PendingBattle from "./PendingBattle";
-import SongSelection from "./SongSelection";
+import SongLineupSelection from "./SongLineupSelection";
 
 interface BattlePhaseProps {
   game: BattleGame;
@@ -19,8 +19,8 @@ export default function BattlePhase({ game, view }: BattlePhaseProps) {
 
   if (view.status === "PENDING") return <PendingBattle inviteCode={view.inviteCode} />;
 
-  if (view.round?.status === "SONG_PICKS") {
-    return <SongSelection key={view.round.id} round={view.round} game={game} />;
+  if (view.status === "SELECTING") {
+    return <SongLineupSelection game={game} view={view} />;
   }
 
   if (view.round?.status === "GUESSING") {

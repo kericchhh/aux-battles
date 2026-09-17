@@ -100,7 +100,7 @@ Do not store the session token in local storage. The server stores only a hash a
 ```
 ## Adding songs
 
-Signed-in players can upload songs from the song-selection menu during a battle. Uploads enter the shared song catalog after background processing succeeds. The request uses multipart form data and must include:
+Signed-in players can upload songs from the pre-game lineup menu. Uploads enter the shared song catalog after background processing succeeds. The request uses multipart form data and must include:
 
 - `song`: the audio file
 - `title`: the song title
@@ -139,12 +139,12 @@ pip install demucs
 python -m demucs \
   -n htdemucs \
   --mp3 \
-  --out uploads/stems \
+  --out storage/manual-stems \
   /absolute/path/to/song.mp3
 ```
 __Demucs creates files similar to:__
 ```text
-uploads/stems/htdemucs/song/
+storage/manual-stems/htdemucs/song/
 ├── bass.mp3
 ├── drums.mp3
 ├── other.mp3
@@ -198,7 +198,7 @@ __The login and registration body fields are__:
 | POST | `/battles` | Create a battle |
 | POST | `/battles/join` | Join with an invite code |
 | GET | `/battles/:battleId` |Read battle state |
-| POST | `/battles/:battleId/rounds/picks` |Pick a song |
+| PUT | `/battles/:battleId/lineup` | Lock one song per round before the battle starts |
 | POST | `/rounds/:roundId/guess` | Submit a guess |
 | GET | `/rounds/:roundId/audio` |Stream authorized round audio |
 | POST | `/songs` | Queue an authenticated MP3 upload |
@@ -210,6 +210,7 @@ __The login and registration body fields are__:
 
 - A battle has one host and at most one guest.
 - A user cannot join their own battle.
+- Both players lock a complete, duplicate-free lineup before round one starts.
 - Each battle round has a unique (battle_id, round_number) pair.
 - Each player has at most one guess per attempt.
 - Guess submissions include the expected attempt and round state to prevent stale or duplicate requests.

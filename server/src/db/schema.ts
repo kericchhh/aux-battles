@@ -39,8 +39,8 @@ export const refreshTokens = pgTable("refresh_tokens", {
 })
 
 export const songStatus = pgEnum("song_status", ["PROCESSING", "READY", "FAILED"])
-export const battleStatus = pgEnum("battle_status", ["PENDING", "ONGOING", "FINISHED"])
-export const roundStatus = pgEnum("round_status", ["SONG_PICKS", "GUESSING", "FINISHED"])
+export const battleStatus = pgEnum("battle_status", ["PENDING", "SELECTING", "ONGOING", "FINISHED"])
+export const roundStatus = pgEnum("round_status", ["WAITING", "GUESSING", "FINISHED"])
 export const roundStage = pgEnum("round_stage", ["DRUM", "BASS", "MELODY", "FULL"])
 
 export const songsTable = pgTable("songs", {
@@ -68,8 +68,6 @@ export const battlesTable = pgTable("battles", {
     rounds: integer("rounds").default(5).notNull(),
     currentRound: integer("current_round").default(1).notNull(),
     inviteCode: varchar("invite_code", { length: 6 }).notNull().unique(),
-    hostSongId: uuid("host_song_id").references(() => songsTable.id),
-    guestSongId: uuid("guest_song_id").references(() => songsTable.id),
     createdAt: timestamp("creted_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull().$onUpdate(() => new Date())
 },
@@ -120,13 +118,13 @@ export const roundsTable = pgTable("rounds", {
     guestPoints: integer("guest_points").default(0).notNull(),
     hostFinished: boolean("host_finished").default(false).notNull(),
     guestFinished: boolean("guest_finished").default(false).notNull(),
-    status: roundStatus().default("SONG_PICKS").notNull()
+    status: roundStatus().default("WAITING").notNull()
 },
     (table) => [
         unique("rounds_battle_number_unique").on(table.battleId, table.roundNumber),
         check("rounds_number_positive", sql`${table.roundNumber} > 0`),
         check("rounds_point_valid", sql`${table.hostPoints} between 0 and 100 and ${table.guestPoints} between 0 and 100`),
-        check("rounds_songs_required_after_selection", sql` ${table.status} = 'SONG_PICKS' or (${table.hostSongId} is not null and ${table.guestSongId} is not null)`),
+        check("rounds_songs_required_after_selection", sql`${table.status} = 'WAITING' or (${table.hostSongId} is not null and ${table.guestSongId} is not null)`),
         check("rounds_finished_players", sql`${table.status} <> 'FINISHED' or (${table.hostFinished} and ${table.guestFinished})`)
     ],
 

@@ -2,8 +2,6 @@ import { eq, and, isNull, ne } from "drizzle-orm";
 import { db } from "../index.js";
 import { battlesTable, roundsTable } from "../schema.js";
 import { customAlphabet } from "nanoid";
-import { getRoundByBattleId } from "./rounds.js";
-import { AppError } from "../../utils/AppError.js";
 import type { DbExecutor, Transaction } from "../types.js";
 
 const generateInviteCode = customAlphabet(
@@ -32,7 +30,7 @@ export async function getBattleById(battleId: string, executor: DbExecutor = db)
 export async function joinBattle(battleId: string, guestId: string, tx: Transaction) {
     const [res] = await tx
         .update(battlesTable)
-        .set({ guestId, status: "ONGOING" })
+        .set({ guestId, status: "SELECTING" })
         .where(and(
             eq(battlesTable.id, battleId),
             eq(battlesTable.status, "PENDING"),
@@ -40,6 +38,18 @@ export async function joinBattle(battleId: string, guestId: string, tx: Transact
             ne(battlesTable.hostId, guestId)
         )).returning()
     return res
+}
+
+export async function startBattle(battleId: string, tx: Transaction) {
+    const [res] = await tx
+        .update(battlesTable)
+        .set({ status: "ONGOING" })
+        .where(and(
+            eq(battlesTable.id, battleId),
+            eq(battlesTable.status, "SELECTING"),
+        ))
+        .returning();
+    return res;
 }
 
 export async function advanceBattle(battleId: string, currentRound: number, tx: Transaction) {

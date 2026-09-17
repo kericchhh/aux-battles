@@ -1,4 +1,4 @@
-import { eq, ilike, and } from "drizzle-orm";
+import { eq, ilike, and, inArray } from "drizzle-orm";
 import { db } from "../index.js";
 import { songsTable } from "../schema.js";
 import  type { Transaction, DbExecutor } from "../types.js"
@@ -17,7 +17,7 @@ function pageOffset(offset: number) {
 
 export async function getSongs(executor: DbExecutor = db, limit = 50, offset = 0) {
    return await executor
-        .select()
+        .select(catalog)
         .from(songsTable)
         .where(eq(songsTable.status,"READY"))
         .orderBy(songsTable.title, songsTable.id).limit(pageSize(limit)).offset(pageOffset(offset))
@@ -72,4 +72,12 @@ export async function deleteSongQuery(id: string, executor: DbExecutor = db) {
 export async function getSongForShare(songId: string, tx: Transaction) {
     const [res] = await tx.select().from(songsTable).where(eq(songsTable.id, songId)).for("share")
     return res
+}
+
+export async function getSongsForShare(songIds: string[], tx: Transaction) {
+    return tx
+        .select()
+        .from(songsTable)
+        .where(inArray(songsTable.id, songIds))
+        .for("share");
 }

@@ -50,6 +50,13 @@
       "when": 1789213208041,
       "tag": "0006_skinny_shinko_yamashiro",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789557398961,
+      "tag": "0007_pregame_lineups",
+      "breakpoints": true
     }
   ]
 }
