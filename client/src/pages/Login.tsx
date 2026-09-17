@@ -95,6 +95,7 @@ export default function Login() {
         <ErrorBanner message={error} />
       )}
 
+      <label htmlFor="identifier" className="-mb-3 text-sm font-medium">Username or email</label>
       <Input
         type="text"
         id="identifier"
@@ -109,6 +110,7 @@ export default function Login() {
         required
       />
 
+      <label htmlFor="password" className="-mb-3 text-sm font-medium">Password</label>
       <Input
         type="password"
         id="password"

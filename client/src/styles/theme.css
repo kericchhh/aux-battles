@@ -1,36 +1,31 @@
 @theme static {
-  /* Brand colors */
-  --color-primary: #da70d6;
-  --color-primary-hover: #e79ae4;
-  --color-primary-soft: #a84fa4;
-  --color-primary-dark: #6b2868;
+  --color-primary: #fa732a;
+  --color-primary-hover: #ff8a4c;
+  --color-primary-soft: #a94b1e;
+  --color-primary-dark: #4a2515;
+
+  /* Complementary accent */
+  --color-secondary: #2dd4bf;
+  --color-secondary-hover: #5eead4;
 
   /* Black surfaces */
-  --color-canvas: #050305;
-  --color-surface: #0d090d;
-  --color-surface-raised: #1a1019;
-  --color-surface-hover: #291527;
-
-  /* Background glow */
-  --color-glow: #592255;
+  --color-canvas: #09090b;
+  --color-surface: #111113;
+  --color-surface-raised: #18181b;
+  --color-surface-hover: #202024;
 
   /* Text */
-  --color-foreground: #fff7ff;
-  --color-muted: #d6b8d4;
+  --color-foreground: #fafafa;
+  --color-muted: #a1a1aa;
 
   /* Status colors */
-  --color-danger: #ff6b81;
-  --color-success: #78dba9;
+  --color-danger: #ff7890;
+  --color-success: #2dd4bf;
 
   /* Typography */
-  --font-sans: "Electrolize", sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
 }
 
 @utility bg-app {
-  background-image: radial-gradient(
-    circle at 35% 35%,
-    var(--color-glow) 0%,
-    var(--color-surface-raised) 35%,
-    var(--color-canvas) 100%
-  );
+  background-color: var(--color-canvas);
 }

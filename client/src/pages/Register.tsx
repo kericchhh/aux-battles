@@ -5,7 +5,7 @@ import { register } from "../api/auth";
 import AuthFormLayout from "../components/AuthFormLayout";
 import ErrorBanner from "../components/ErrorBanner";
 import Input from "../components/Inputs";
-import RegisterButton from "../components/Button";
+import Button from "../components/Button";
 
 export default function Register() {
     const [username, setUsername] = useState("");
@@ -14,25 +14,26 @@ export default function Register() {
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
 
-    const navigate = useNavigate()
+    const navigate = useNavigate();
 
     async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-        e.preventDefault()
-        setError(null)
-        setLoading(true)
+        e.preventDefault();
+        setError(null);
+        setLoading(true);
         try {
             await register({ username: username.trim(), email: email.trim(), password });
-            navigate("/login", {state: {registered: true}})
+            navigate("/login", { state: { registered: true } });
         } catch (err) {
-            setError(errorMessage(err))
+            setError(errorMessage(err));
         } finally {
-            setLoading(false)
+            setLoading(false);
         }
     }
     return (
         <AuthFormLayout title="Create account" onSubmit={handleSubmit}>
             {error && <ErrorBanner message={error} />}
 
+            <label htmlFor="username" className="-mb-3 text-sm font-medium">Username</label>
             <Input
                 type="text"
                 id="username" name="username" autoComplete="username"
@@ -41,6 +42,7 @@ export default function Register() {
                 onChange={(e) => setUsername(e.target.value)}
                 required
             />
+            <label htmlFor="email" className="-mb-3 text-sm font-medium">Email</label>
             <Input
                 type="email"
                 id="email" name="email" autoComplete="email"
@@ -49,6 +51,7 @@ export default function Register() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
             />
+            <label htmlFor="password" className="-mb-3 text-sm font-medium">Password</label>
             <Input
                 type="password"
                 id="password" name="password" autoComplete="new-password"
@@ -58,9 +61,7 @@ export default function Register() {
                 required
             />
 
-            <RegisterButton type="submit" loading={loading}>
-                {loading ? "Creating account..." : "Register"}
-            </RegisterButton>
+            <Button type="submit" loading={loading} loadingText="Creating account…">Register</Button>
 
             <p className="text-neutral-400 text-sm text-center mt-2">
                 Already have an account?{" "}

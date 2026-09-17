@@ -5,10 +5,10 @@ export type ButtonVariant =
 
 const variants: Record<ButtonVariant, string> = {
   primary:
-    "bg-primary text-black hover:bg-primary-hover",
+    "bg-foreground text-canvas hover:bg-primary/90",
 
   secondary:
-    "border border-primary text-primary hover:bg-primary hover:text-black",
+    "border border-white/12 bg-transparent text-foreground hover:bg-white/5",
 
   ghost:
     "text-muted hover:bg-white/5 hover:text-foreground",
@@ -19,8 +19,8 @@ export function buttonStyles(
 ) {
   return [
     "inline-flex items-center justify-center",
-    "rounded-xl px-5 py-3 font-medium",
-    "transition-colors",
+    "min-h-10 rounded-lg px-4 py-2.5 text-sm font-medium",
+    "transition-colors duration-150",
     "focus-visible:outline-2",
     "focus-visible:outline-offset-2",
     "focus-visible:outline-primary",

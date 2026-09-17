@@ -116,10 +116,9 @@ export default function SongUploadPanel({ onReady }: SongUploadPanelProps) {
     (processing.error ? errorMessage(processing.error) : null);
 
   return (
-    <form onSubmit={submit} className="my-6 space-y-4 rounded-xl border border-white/15 bg-white/5 p-4">
+    <form onSubmit={submit} className="mt-4 space-y-4">
       <div>
-        <h3 className="font-semibold">Upload an MP3</h3>
-        <p className="mt-1 text-sm text-muted">
+        <p className="text-sm text-muted">
           Choose the beginning of the 12-second clip used in the game.
         </p>
       </div>
@@ -130,7 +129,7 @@ export default function SongUploadPanel({ onReady }: SongUploadPanelProps) {
         accept="audio/mpeg,.mp3"
         disabled={busy}
         onChange={(event) => selectFile(event.target.files?.[0] ?? null)}
-        className="block w-full text-sm text-muted file:mr-4 file:rounded-lg file:border-0 file:bg-primary file:px-4 file:py-2 file:text-black"
+        className="block w-full rounded-lg border border-dashed border-white/15 p-3 text-sm text-muted file:mr-3 file:rounded-md file:border-0 file:bg-white/10 file:px-3 file:py-2 file:text-sm file:text-foreground hover:border-white/25"
       />
 
       {audioUrl && (
@@ -164,10 +163,10 @@ export default function SongUploadPanel({ onReady }: SongUploadPanelProps) {
       )}
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <Input required maxLength={255} value={title} disabled={busy} onChange={(event) => setTitle(event.target.value)} placeholder="Title" />
-        <Input required maxLength={255} value={artist} disabled={busy} onChange={(event) => setArtist(event.target.value)} placeholder="Artist" />
-        <Input required maxLength={50} value={genre} disabled={busy} onChange={(event) => setGenre(event.target.value)} placeholder="Genre" />
-        <Input maxLength={255} value={album} disabled={busy} onChange={(event) => setAlbum(event.target.value)} placeholder="Album (optional)" />
+        <Input aria-label="Song title" required maxLength={255} value={title} disabled={busy} onChange={(event) => setTitle(event.target.value)} placeholder="Title" />
+        <Input aria-label="Artist" required maxLength={255} value={artist} disabled={busy} onChange={(event) => setArtist(event.target.value)} placeholder="Artist" />
+        <Input aria-label="Genre" required maxLength={50} value={genre} disabled={busy} onChange={(event) => setGenre(event.target.value)} placeholder="Genre" />
+        <Input aria-label="Album" maxLength={255} value={album} disabled={busy} onChange={(event) => setAlbum(event.target.value)} placeholder="Album (optional)" />
       </div>
 
       {currentError && <ErrorBanner message={currentError} />}
@@ -194,6 +193,7 @@ export default function SongUploadPanel({ onReady }: SongUploadPanelProps) {
         loading={busy}
         loadingText={upload.isPending ? "Uploading…" : "Processing…"}
         disabled={!file || processingStatus === "READY"}
+        className="w-full"
       >
         Upload and process
       </Button>

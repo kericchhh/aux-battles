@@ -68,7 +68,7 @@ function BattleScreen({ battleId, userId }: BattleScreenProps) {
 
   return (
     <PageShell>
-      <div className="mx-auto flex max-w-4xl flex-col gap-6">
+      <div className="mx-auto flex max-w-6xl flex-col gap-5 sm:gap-6">
         <BattleHeader
           connection={connection}
           currentRound={view.currentRound}

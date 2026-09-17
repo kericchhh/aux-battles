@@ -11,7 +11,7 @@ export default function PageShell({
         bg-app
         min-h-[calc(100dvh-4rem)]
         w-full
-        px-4 py-8
+        px-4 py-6 sm:px-6 sm:py-10
         text-foreground
         ${className}
       `}

@@ -5,11 +5,17 @@ import {
 import {
   useQuery,
   useQueryClient,
+  type QueryClient,
 } from "@tanstack/react-query";
 import * as auth from "../api/auth";
+import type { User } from "../api/auth";
+import { queryKeys } from "../lib/queryKeys";
 import { AuthContext } from "./auth-context";
 
-const meQueryKey = ["me"] as const;
+function replaceCachedUser(cache: QueryClient, user: User | null) {
+  cache.removeQueries({ predicate: (query) => query.queryKey[0] !== "me" });
+  cache.setQueryData(queryKeys.me, user);
+}
 
 export function AuthProvider({
   children,
@@ -19,7 +25,7 @@ export function AuthProvider({
   const cache = useQueryClient();
 
   const me = useQuery({
-    queryKey: meQueryKey,
+    queryKey: queryKeys.me,
 
     queryFn: ({ signal }) =>
       auth.getMe(signal),
@@ -33,15 +39,7 @@ export function AuthProvider({
     function expireSession() {
       void cache.cancelQueries();
 
-      cache.removeQueries({
-        predicate: (query) =>
-          query.queryKey[0] !== "me",
-      });
-
-      cache.setQueryData(
-        meQueryKey,
-        null,
-      );
+      replaceCachedUser(cache, null);
     }
 
     window.addEventListener(
@@ -68,30 +66,14 @@ export function AuthProvider({
 
     await cache.cancelQueries();
 
-    cache.removeQueries({
-      predicate: (query) =>
-        query.queryKey[0] !== "me",
-    });
-
-    cache.setQueryData(
-      meQueryKey,
-      user,
-    );
+    replaceCachedUser(cache, user);
   }
 
   async function logout() {
     await auth.logout();
     await cache.cancelQueries();
 
-    cache.removeQueries({
-      predicate: (query) =>
-        query.queryKey[0] !== "me",
-    });
-
-    cache.setQueryData(
-      meQueryKey,
-      null,
-    );
+    replaceCachedUser(cache, null);
   }
 
   function refresh() {

@@ -10,25 +10,20 @@ export default function AuthFormLayout({
   children,
 }: AuthFormLayoutProps) {
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-app x-6">
-      <form
-        onSubmit={onSubmit}
-        className="
-          w-full max-w-md
-          flex flex-col gap-5
-          rounded-3xl
-          bg-surface
-          p-8
-          shadow-2xl
-          border border-white/5
-        "
-      >
-        <h1 className="text-3xl font-bold text-foreground mb-2">
-          {title}
-        </h1>
+    <main className="bg-app grid min-h-dvh w-full place-items-center px-4 py-10 text-foreground">
+      <div className="w-full max-w-md">
+        <a href="/" className="mb-7 flex items-center justify-center gap-2 text-lg font-bold tracking-tight">
+          <span className="text-primary">AUX</span> BATTLES
+        </a>
+        <form onSubmit={onSubmit} className="flex w-full flex-col gap-5 rounded-xl border border-white/10 bg-surface p-6 sm:p-8">
+          <div className="mb-2">
+            <p className="mb-2 text-sm font-semibold uppercase tracking-[0.18em] text-primary">Welcome</p>
+            <h1 className="text-3xl font-bold text-foreground">{title}</h1>
+          </div>
 
-        {children}
-      </form>
-    </div>
+          {children}
+        </form>
+      </div>
+    </main>
   );
 }
