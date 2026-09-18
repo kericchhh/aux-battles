@@ -20,4 +20,9 @@ export const DEMUCS_BIN = path.resolve(
         path.join(repositoryRoot, "worker", "venv", "bin", "demucs")
 );
 
+export const YT_DLP_BIN = path.resolve(
+    process.env.YT_DLP_BIN ??
+        path.join(repositoryRoot, "worker", "venv", "bin", "yt-dlp")
+);
+
 export const CLIP_DURATION_SECONDS = 12;
