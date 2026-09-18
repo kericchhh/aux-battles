@@ -5,7 +5,7 @@ import type { BattleRound } from "@/lib/types/battle";
 import AudioPlayer from "./AudioPlayer";
 
 const waveMock = vi.hoisted(() => ({
-  listeners: new Map<string, (...args: number[]) => void>(),
+  listeners: new Map<string, (...args: unknown[]) => void>(),
   load: vi.fn(),
   destroy: vi.fn(),
   setMuted: vi.fn(),
@@ -19,7 +19,7 @@ vi.mock("wavesurfer.js", () => ({
       destroy: waveMock.destroy,
       setMuted: waveMock.setMuted,
       playPause: waveMock.playPause,
-      on: (event: string, listener: (...args: number[]) => void) => {
+      on: (event: string, listener: (...args: unknown[]) => void) => {
         waveMock.listeners.set(event, listener);
         return vi.fn();
       },
@@ -42,6 +42,7 @@ describe("AudioPlayer", () => {
   beforeEach(() => {
     waveMock.listeners.clear();
     waveMock.load.mockClear();
+    waveMock.setMuted.mockClear();
   });
 
   it("does not reload WaveSurfer during an ordinary render", () => {
@@ -71,5 +72,30 @@ describe("AudioPlayer", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Audio could not be loaded");
     await user.click(screen.getByRole("button", { name: "Retry audio" }));
     expect(waveMock.load).toHaveBeenCalledTimes(2);
+  });
+
+  it("resets the mute control when retrying with a new player", async () => {
+    const user = userEvent.setup();
+    render(<AudioPlayer round={round} />);
+    act(() => waveMock.listeners.get("ready")?.(12));
+    await user.click(screen.getByRole("button", { name: "Mute audio" }));
+    act(() => waveMock.listeners.get("error")?.(new Error("Audio failed")));
+
+    await user.click(screen.getByRole("button", { name: "Retry audio" }));
+
+    expect(screen.getByRole("button", { name: "Mute audio" })).toBeVisible();
+  });
+
+  it("expires the session when the audio request is unauthorized", () => {
+    const expired = vi.fn();
+    window.addEventListener("session:expired", expired);
+    render(<AudioPlayer round={round} />);
+
+    act(() => waveMock.listeners.get("error")?.(
+      new Error("Failed to fetch audio: 401 (Unauthorized)"),
+    ));
+
+    expect(expired).toHaveBeenCalledOnce();
+    window.removeEventListener("session:expired", expired);
   });
 });

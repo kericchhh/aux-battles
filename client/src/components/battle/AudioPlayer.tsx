@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import WaveSurfer from "wavesurfer.js";
 import { LoaderCircle, Pause, Play, RotateCw, Volume2, VolumeX } from "lucide-react";
-import { API_URL } from "@/api/client";
+import { API_URL, notifySessionExpired } from "@/api/client";
 import type { BattleRound } from "@/lib/types/battle";
 import Button from "../Button";
 import ErrorBanner from "../ErrorBanner";
@@ -32,6 +32,7 @@ export default function AudioPlayer({ round }: { round: BattleRound }) {
     setFailed(false);
     setIsReady(false);
     setIsPlaying(false);
+    setMuted(false);
     setCurrentTime(0);
     setDuration(0);
 
@@ -61,9 +62,12 @@ export default function AudioPlayer({ round }: { round: BattleRound }) {
       player.on("play", () => setIsPlaying(true)),
       player.on("pause", () => setIsPlaying(false)),
       player.on("finish", () => setIsPlaying(false)),
-      player.on("error", () => {
+      player.on("error", (error) => {
         setFailed(true);
         setIsReady(false);
+        if (error instanceof Error && /:\s*401(?:\s|\()/.test(error.message)) {
+          notifySessionExpired();
+        }
       }),
     ];
 

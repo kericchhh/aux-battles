@@ -13,16 +13,25 @@ vi.mock("@/api/songs", () => ({
 const uploadMock = vi.mocked(uploadSong);
 const statusMock = vi.mocked(getSongStatus);
 
-function renderPanel(onReady = vi.fn()) {
+function renderPanel(onReady = vi.fn(), targetRound = 0) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  render(
+  const view = render(
     <QueryClientProvider client={client}>
-      <SongUploadPanel onReady={onReady} />
+      <SongUploadPanel targetRound={targetRound} onReady={onReady} />
     </QueryClientProvider>,
   );
-  return onReady;
+  return {
+    onReady,
+    rerenderTarget(nextTargetRound: number) {
+      view.rerender(
+        <QueryClientProvider client={client}>
+          <SongUploadPanel targetRound={nextTargetRound} onReady={onReady} />
+        </QueryClientProvider>,
+      );
+    },
+  };
 }
 
 describe("SongUploadPanel", () => {
@@ -41,7 +50,7 @@ describe("SongUploadPanel", () => {
 
   it("uploads a selected clip and reports the song when processing completes", async () => {
     const user = userEvent.setup();
-    const onReady = renderPanel();
+    const { onReady } = renderPanel();
     uploadMock.mockResolvedValue({ id: "song-1", status: "PROCESSING" });
     statusMock.mockResolvedValue({
       id: "song-1",
@@ -74,7 +83,10 @@ describe("SongUploadPanel", () => {
         genre: "Rock",
         clipStartSeconds: 15,
       }), expect.any(Object));
-      expect(onReady).toHaveBeenCalledWith({ id: "song-1", title: "Test Song" });
+      expect(onReady).toHaveBeenCalledWith(
+        { id: "song-1", title: "Test Song", artist: "Test Artist" },
+        0,
+      );
     });
 
     expect(screen.getByText("Song ready and selected.")).toBeVisible();
@@ -104,5 +116,45 @@ describe("SongUploadPanel", () => {
     await user.click(screen.getByRole("button", { name: "Upload and process" }));
 
     expect(await screen.findByText(/processing service is currently offline/i)).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Choose from catalog instead" }));
+    expect(screen.getByLabelText("Upload MP3 file")).toBeEnabled();
+    expect(screen.queryByText(/processing service is currently offline/i)).not.toBeInTheDocument();
+  });
+
+  it("keeps the round selected when the upload began", async () => {
+    const user = userEvent.setup();
+    let finishProcessing!: (value: Awaited<ReturnType<typeof getSongStatus>>) => void;
+    uploadMock.mockResolvedValue({ id: "song-3", status: "PROCESSING" });
+    statusMock.mockImplementation(() => new Promise((resolve) => {
+      finishProcessing = resolve;
+    }));
+    const { onReady, rerenderTarget } = renderPanel(vi.fn(), 0);
+
+    const file = new File(["audio"], "pinned.mp3", { type: "audio/mpeg" });
+    await user.upload(screen.getByLabelText("Upload MP3 file"), file);
+    const audio = document.querySelector("audio");
+    Object.defineProperty(audio!, "duration", { configurable: true, value: 60 });
+    fireEvent.loadedMetadata(audio!);
+    await user.type(screen.getByPlaceholderText("Title"), "Pinned Song");
+    await user.type(screen.getByPlaceholderText("Artist"), "Pinned Artist");
+    await user.type(screen.getByPlaceholderText("Genre"), "Rock");
+    await user.click(screen.getByRole("button", { name: "Upload and process" }));
+    await waitFor(() => expect(statusMock).toHaveBeenCalled());
+
+    rerenderTarget(1);
+    finishProcessing({
+      id: "song-3",
+      title: "Pinned Song",
+      artist: "Pinned Artist",
+      status: "READY",
+      processingError: null,
+      workerAvailable: null,
+    });
+
+    await waitFor(() => expect(onReady).toHaveBeenCalledWith(
+      { id: "song-3", title: "Pinned Song", artist: "Pinned Artist" },
+      0,
+    ));
   });
 });

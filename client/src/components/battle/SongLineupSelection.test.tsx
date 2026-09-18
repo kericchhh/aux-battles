@@ -7,13 +7,32 @@ import type { BattleGame } from "@/hooks/useBattle";
 import type { BattleView } from "@/lib/types/battle";
 import SongLineupSelection from "./SongLineupSelection";
 
+const uploadPanelMock = vi.hoisted(() => ({
+  targetRound: 0,
+  onReady: null as null | ((song: { id: string; title: string; artist: string }, targetRound: number) => void),
+}));
+
 vi.mock("@/api/songs", () => ({
   SONG_PAGE_SIZE: 20,
   getSongs: vi.fn(),
 }));
 
 vi.mock("./SongUploadPanel", () => ({
-  default: () => <div>Upload panel</div>,
+  default: ({ targetRound, onReady }: {
+    targetRound: number;
+    onReady: (song: { id: string; title: string; artist: string }, targetRound: number) => void;
+  }) => (
+    <div>
+      <button type="button" onClick={() => {
+        uploadPanelMock.targetRound = targetRound;
+        uploadPanelMock.onReady = onReady;
+      }}>Begin upload</button>
+      <button type="button" onClick={() => uploadPanelMock.onReady?.(
+        { id: "uploaded-song", title: "Uploaded Song", artist: "Uploaded Artist" },
+        uploadPanelMock.targetRound,
+      )}>Finish upload</button>
+    </div>
+  ),
 }));
 
 const songsMock = vi.mocked(getSongs);
@@ -63,6 +82,8 @@ describe("SongLineupSelection", () => {
       { id: "song-1", title: "First Song", artist: "First Artist", genre: "Rock", duration: 120 },
       { id: "song-2", title: "Second Song", artist: "Second Artist", genre: "Pop", duration: 150 },
     ]);
+    uploadPanelMock.targetRound = 0;
+    uploadPanelMock.onReady = null;
   });
 
   it("submits one distinct song for every round", async () => {
@@ -83,5 +104,17 @@ describe("SongLineupSelection", () => {
       "Waiting for your opponent to lock their lineup",
     );
     expect(screen.queryByRole("button", { name: "Lock in lineup" })).not.toBeInTheDocument();
+  });
+
+  it("keeps a completed upload in the round where it began", async () => {
+    const user = userEvent.setup();
+    renderSelection();
+
+    await user.click(screen.getByRole("button", { name: "Begin upload" }));
+    await user.click(screen.getByRole("button", { name: /Round 2Select a song/ }));
+    await user.click(screen.getByRole("button", { name: "Finish upload" }));
+
+    expect(screen.getByRole("button", { name: /Round 1Uploaded Song/ })).toBeVisible();
+    expect(screen.getByRole("button", { name: /Round 2Select a song/ })).toHaveAttribute("aria-pressed", "true");
   });
 });

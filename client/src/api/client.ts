@@ -1,6 +1,9 @@
 import type { Issue } from "@/lib/types/api";
 
 export const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/$/, "")
+export function notifySessionExpired() {
+    window.dispatchEvent(new Event("session:expired"))
+}
 export class ApiError extends Error {
     status: number;
     issues: Issue[];
@@ -24,7 +27,7 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
     }
     if (!response.ok) {
         if (response.status === 401 && path !== "/users/login" && path !== "/users/register" && path !== "/users/me"){
-            window.dispatchEvent(new Event("session:expired"))
+            notifySessionExpired()
         }
         throw new ApiError(data?.message || "Request failed", response.status, Array.isArray(data?.issues) ? data.issues : [])
     }

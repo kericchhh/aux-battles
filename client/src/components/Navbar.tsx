@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AudioLines, House, LogOut, UserRound } from "lucide-react";
+import { errorMessage } from "@/api/client";
 import { useAuth } from "@/context/auth-context";
+import ErrorBanner from "./ErrorBanner";
 
 const navAction = "inline-flex min-h-10 items-center gap-2 rounded-xl border border-transparent px-3 py-2 text-sm text-muted transition-colors hover:bg-white/5 hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50";
 
@@ -9,13 +11,17 @@ export default function NavBar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
 
   async function handleLogout() {
     if (isLoggingOut) return;
+    setLogoutError(null);
     setIsLoggingOut(true);
     try {
       await logout();
       navigate("/login", { replace: true, state: { loggedOut: true } });
+    } catch (error) {
+      setLogoutError(errorMessage(error));
     } finally {
       setIsLoggingOut(false);
     }
@@ -47,6 +53,11 @@ export default function NavBar() {
           <><Link to="/register" className={navAction}>Register</Link><Link to="/login" className={navAction}>Log in</Link></>
         )}
       </div>
+      {logoutError && (
+        <div className="absolute right-4 top-[calc(100%+0.75rem)] w-[min(24rem,calc(100vw-2rem))]">
+          <ErrorBanner message={logoutError} />
+        </div>
+      )}
     </nav>
   );
 }

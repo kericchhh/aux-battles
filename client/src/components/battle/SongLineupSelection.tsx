@@ -45,9 +45,9 @@ export default function SongLineupSelection({ game, view }: SongLineupSelectionP
     setFilter((current) => ({ ...current, offset }));
   }
 
-  function assignSong(song: LineupSong) {
+  function assignSong(song: LineupSong, targetRound = activeRound) {
     const duplicateRound = lineup.findIndex(
-      (selected, index) => index !== activeRound && selected?.id === song.id,
+      (selected, index) => index !== targetRound && selected?.id === song.id,
     );
     if (duplicateRound !== -1) {
       setSelectionError(`${song.title} is already assigned to round ${duplicateRound + 1}.`);
@@ -55,12 +55,12 @@ export default function SongLineupSelection({ game, view }: SongLineupSelectionP
     }
 
     const nextLineup = [...lineup];
-    nextLineup[activeRound] = song;
+    nextLineup[targetRound] = song;
     setLineup(nextLineup);
     setSelectionError(null);
 
-    const nextEmpty = nextLineup.findIndex((selected, index) => index > activeRound && !selected);
-    if (nextEmpty !== -1) setActiveRound(nextEmpty);
+    const nextEmpty = nextLineup.findIndex((selected, index) => index > targetRound && !selected);
+    if (nextEmpty !== -1 && targetRound === activeRound) setActiveRound(nextEmpty);
   }
 
   function removeSong(index: number) {
@@ -185,8 +185,8 @@ export default function SongLineupSelection({ game, view }: SongLineupSelectionP
 
         <section aria-labelledby="upload-heading" className="min-w-0 rounded-lg border border-white/10 bg-canvas/25 p-4">
           <h3 id="upload-heading" className="font-medium">Upload a song</h3>
-          <p className="mt-1 text-xs text-muted">It will be assigned to round {activeRound + 1} when processing finishes.</p>
-          <SongUploadPanel onReady={assignSong} />
+          <p className="mt-1 text-xs text-muted">The selected round is fixed when the upload begins.</p>
+          <SongUploadPanel targetRound={activeRound} onReady={assignSong} />
         </section>
       </div>
 

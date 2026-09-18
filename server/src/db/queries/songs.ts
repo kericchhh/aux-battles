@@ -1,4 +1,4 @@
-import { eq, ilike, and, inArray } from "drizzle-orm";
+import { eq, ilike, and, inArray, or } from "drizzle-orm";
 import { db } from "../index.js";
 import { songsTable } from "../schema.js";
 import  type { Transaction, DbExecutor } from "../types.js"
@@ -45,7 +45,10 @@ export async function searchSong(query: string, executor: DbExecutor = db, limit
     return executor.select(catalog).from(songsTable)
         .where(and(
             eq(songsTable.status, "READY"),
-            ilike(songsTable.title, `%${escaped}%`)
+            or(
+                ilike(songsTable.title, `%${escaped}%`),
+                ilike(songsTable.artist, `%${escaped}%`),
+            )
         ))
         .orderBy(songsTable.title, songsTable.id).limit(pageSize(limit)).offset(pageOffset(offset))
 }

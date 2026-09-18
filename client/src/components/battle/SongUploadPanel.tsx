@@ -10,7 +10,11 @@ import ErrorBanner from "../ErrorBanner";
 import Input from "../Inputs";
 
 interface SongUploadPanelProps {
-  onReady: (song: Pick<SongProcessingStatus, "id" | "title">) => void;
+  targetRound: number;
+  onReady: (
+    song: Pick<SongProcessingStatus, "id" | "title" | "artist">,
+    targetRound: number,
+  ) => void;
 }
 
 function formatSeconds(value: number) {
@@ -19,10 +23,12 @@ function formatSeconds(value: number) {
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
-export default function SongUploadPanel({ onReady }: SongUploadPanelProps) {
+export default function SongUploadPanel({ targetRound, onReady }: SongUploadPanelProps) {
   const cache = useQueryClient();
   const audioRef = useRef<HTMLAudioElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const announcedReadyId = useRef<string | null>(null);
+  const uploadTargetRound = useRef<number | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [title, setTitle] = useState("");
@@ -58,10 +64,17 @@ export default function SongUploadPanel({ onReady }: SongUploadPanelProps) {
 
   useEffect(() => {
     const song = processing.data;
-    if (song?.status !== "READY" || announcedReadyId.current === song.id) return;
+    if (
+      song?.status !== "READY" ||
+      announcedReadyId.current === song.id ||
+      uploadTargetRound.current === null
+    ) return;
 
     announcedReadyId.current = song.id;
-    onReady({ id: song.id, title: song.title });
+    onReady(
+      { id: song.id, title: song.title, artist: song.artist },
+      uploadTargetRound.current,
+    );
     void cache.invalidateQueries({ queryKey: ["songs"] });
   }, [cache, onReady, processing.data]);
 
@@ -94,6 +107,7 @@ export default function SongUploadPanel({ onReady }: SongUploadPanelProps) {
       return;
     }
 
+    uploadTargetRound.current = targetRound;
     upload.mutate({
       file,
       title: title.trim(),
@@ -102,6 +116,12 @@ export default function SongUploadPanel({ onReady }: SongUploadPanelProps) {
       album: album.trim() || undefined,
       clipStartSeconds,
     });
+  }
+
+  function leaveProcessing() {
+    selectFile(null);
+    uploadTargetRound.current = null;
+    if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
   const maxClipStart = Math.max(0, Math.floor(duration - CLIP_DURATION_SECONDS));
@@ -120,6 +140,7 @@ export default function SongUploadPanel({ onReady }: SongUploadPanelProps) {
       </div>
 
       <input
+        ref={fileInputRef}
         aria-label="Upload MP3 file"
         type="file"
         accept="audio/mpeg,.mp3"
@@ -170,7 +191,12 @@ export default function SongUploadPanel({ onReady }: SongUploadPanelProps) {
         <p role="status" className="text-sm text-muted">Separating the song into stems…</p>
       )}
       {processingStatus === "PROCESSING" && processing.data?.workerAvailable === false && (
-        <ErrorBanner message="The song is queued, but the processing service is currently offline. Processing will resume automatically." />
+        <div className="space-y-2">
+          <ErrorBanner message="The song is queued, but the processing service is currently offline. Processing will resume automatically." />
+          <Button variant="secondary" onClick={leaveProcessing}>
+            Choose from catalog instead
+          </Button>
+        </div>
       )}
       {processingStatus === "READY" && (
         <p role="status" className="text-sm text-green-300">Song ready and selected.</p>
