@@ -24,3 +24,19 @@ export type SongUpload = {
   clipStartSeconds: number;
 };
 
+export interface YouTubeInfo {
+  videoId: string;
+  title: string;
+  artist: string;
+  duration: number;
+  thumbnail?: string;
+}
+
+export interface YouTubeSongImport {
+  youtubeUrl: string;
+  title: string;
+  artist: string;
+  genre: string;
+  album?: string;
+  clipStartSeconds: number;
+}

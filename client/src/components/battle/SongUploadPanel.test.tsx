@@ -2,16 +2,25 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getSongStatus, uploadSong } from "@/api/songs";
+import {
+  getSongStatus,
+  getYouTubeInfo,
+  importYouTubeSong,
+  uploadSong,
+} from "@/api/songs";
 import SongUploadPanel from "./SongUploadPanel";
 
 vi.mock("@/api/songs", () => ({
   uploadSong: vi.fn(),
   getSongStatus: vi.fn(),
+  getYouTubeInfo: vi.fn(),
+  importYouTubeSong: vi.fn(),
 }));
 
 const uploadMock = vi.mocked(uploadSong);
 const statusMock = vi.mocked(getSongStatus);
+const youtubeInfoMock = vi.mocked(getYouTubeInfo);
+const youtubeImportMock = vi.mocked(importYouTubeSong);
 
 function renderPanel(onReady = vi.fn(), targetRound = 0) {
   const client = new QueryClient({
@@ -38,6 +47,8 @@ describe("SongUploadPanel", () => {
   beforeEach(() => {
     uploadMock.mockReset();
     statusMock.mockReset();
+    youtubeInfoMock.mockReset();
+    youtubeImportMock.mockReset();
     Object.defineProperty(URL, "createObjectURL", {
       configurable: true,
       value: vi.fn(() => "blob:test-song"),
@@ -156,5 +167,57 @@ describe("SongUploadPanel", () => {
       { id: "song-3", title: "Pinned Song", artist: "Pinned Artist" },
       0,
     ));
+  });
+
+  it("imports a selected YouTube clip and reports it when processing completes", async () => {
+    const user = userEvent.setup();
+    const { onReady } = renderPanel();
+    youtubeInfoMock.mockResolvedValue({
+      videoId: "video-1",
+      title: "YouTube Song",
+      artist: "YouTube Artist",
+      duration: 180,
+      thumbnail: "https://i.ytimg.com/test.jpg",
+    });
+    youtubeImportMock.mockResolvedValue({ id: "song-youtube", status: "PROCESSING" });
+    statusMock.mockResolvedValue({
+      id: "song-youtube",
+      title: "YouTube Song",
+      artist: "YouTube Artist",
+      status: "READY",
+      processingError: null,
+      workerAvailable: null,
+    });
+
+    await user.click(screen.getByRole("tab", { name: "YouTube URL" }));
+    await user.type(
+      screen.getByRole("textbox", { name: "YouTube URL" }),
+      "https://www.youtube.com/watch?v=video-1",
+    );
+    await user.click(screen.getByRole("button", { name: "Load video" }));
+
+    expect(await screen.findByDisplayValue("YouTube Song")).toBeVisible();
+    expect(youtubeInfoMock).toHaveBeenCalledWith(
+      "https://www.youtube.com/watch?v=video-1",
+      expect.any(Object),
+    );
+
+    await user.type(screen.getByPlaceholderText("Genre"), "Rock");
+    fireEvent.change(screen.getByRole("slider"), { target: { value: "30" } });
+    await user.click(screen.getByRole("button", { name: "Import and process" }));
+
+    await waitFor(() => {
+      expect(youtubeImportMock).toHaveBeenCalledWith(expect.objectContaining({
+        youtubeUrl: "https://www.youtube.com/watch?v=video-1",
+        title: "YouTube Song",
+        artist: "YouTube Artist",
+        genre: "Rock",
+        clipStartSeconds: 30,
+      }), expect.any(Object));
+      expect(onReady).toHaveBeenCalledWith(
+        { id: "song-youtube", title: "YouTube Song", artist: "YouTube Artist" },
+        0,
+      );
+    });
   });
 });

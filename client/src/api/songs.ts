@@ -1,6 +1,12 @@
 import { apiFetch } from "./client";
 import { SONG_PAGE_SIZE } from "@/lib/constants/songs";
-import type { Song, SongUpload, SongProcessingStatus } from "@/lib/types/songs";
+import type {
+  Song,
+  SongProcessingStatus,
+  SongUpload,
+  YouTubeInfo,
+  YouTubeSongImport,
+} from "@/lib/types/songs";
 
 export function getSongs(
   query: string,
@@ -39,4 +45,18 @@ export function uploadSong(input: SongUpload) {
 
 export function getSongStatus(id: string, signal?: AbortSignal) {
   return apiFetch<SongProcessingStatus>(`/songs/${id}/status`, { signal });
+}
+
+export function getYouTubeInfo(url: string) {
+  return apiFetch<YouTubeInfo>("/songs/youtube/info", {
+    method: "POST",
+    body: JSON.stringify({ url }),
+  });
+}
+
+export function importYouTubeSong(input: YouTubeSongImport) {
+  return apiFetch<{ id: string; status: "PROCESSING" }>("/songs/youtube", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }
