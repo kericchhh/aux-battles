@@ -8,9 +8,72 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type Song struct {
-	ID        pgtype.UUID
-	Title     string
-	Artist    string
+type Battle struct {
+	ID           pgtype.UUID
+	HostID       pgtype.UUID
+	GuestID      pgtype.UUID
+	InviteCode   string
+	Status       string
+	RoundCount   int32
+	CurrentRound int32
+	WinnerID     pgtype.UUID
+	CreatedAt    pgtype.Timestamptz
+}
+
+type Guess struct {
+	ID            pgtype.UUID
+	RoundID       pgtype.UUID
+	UserID        pgtype.UUID
+	Attempt       int32
+	Guess         string
+	Correct       bool
+	PointsAwarded int32
+	CreatedAt     pgtype.Timestamptz
+}
+
+type Round struct {
+	ID            pgtype.UUID
+	BattleID      pgtype.UUID
+	RoundNumber   int32
+	HostSongID    pgtype.UUID
+	GuestSongID   pgtype.UUID
+	HostStage     string
+	GuestStage    string
+	HostPoints    int32
+	GuestPoints   int32
+	HostFinished  bool
+	GuestFinished bool
+	Status        string
+}
+
+type Session struct {
+	TokenHash string
+	UserID    pgtype.UUID
 	CreatedAt pgtype.Timestamptz
+	ExpiresAt pgtype.Timestamptz
+}
+
+type Song struct {
+	ID              pgtype.UUID
+	Title           string
+	Artist          string
+	Genre           string
+	DurationSeconds int32
+	Status          string
+	ProcessingError pgtype.Text
+	FullSongPath    pgtype.Text
+	DrumsPath       pgtype.Text
+	BassPath        pgtype.Text
+	MelodyPath      pgtype.Text
+	VocalsPath      pgtype.Text
+	CreatedAt       pgtype.Timestamptz
+}
+
+type User struct {
+	ID           pgtype.UUID
+	Username     string
+	Email        string
+	PasswordHash string
+	Role         string
+	CreatedAt    pgtype.Timestamptz
 }

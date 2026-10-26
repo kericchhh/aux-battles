@@ -10,12 +10,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/kericchhh/aux-battles/internal/dbgen"
+	"github.com/kericchhh/aux-battles/internal/server"
 )
-
-type server struct {
-	queries *dbgen.Queries
-	logger  *slog.Logger
-}
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -44,15 +40,9 @@ func run(logger *slog.Logger) error {
 		return fmt.Errorf("connect to PostgreSQL: %w", err)
 	}
 
-	app := &server{queries: dbgen.New(pool), logger: logger}
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", app.health)
-	mux.HandleFunc("GET /songs", app.listSongs)
-	mux.HandleFunc("GET /songs/{id}", app.getSong)
-
 	httpServer := &http.Server{
 		Addr:              ":8080",
-		Handler:           logRequests(logger, mux),
+		Handler:           server.New(dbgen.New(pool), logger, os.Getenv("APP_ENV") == "production"),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	logger.Info("API listening", slog.String("address", httpServer.Addr))

@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"encoding/json"
@@ -16,15 +16,11 @@ type songResponse struct {
 	Artist string `json:"artist"`
 }
 
-func (s *server) health(w http.ResponseWriter, _ *http.Request) {
-	_, _ = w.Write([]byte("ok\n"))
-}
-
 func (s *server) listSongs(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.queries.ListSongs(r.Context())
 	if err != nil {
 		s.logger.Error("list songs failed", slog.String("error", err.Error()))
-		http.Error(w, "database error", http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "database error")
 		return
 	}
 
@@ -44,22 +40,22 @@ func (s *server) listSongs(w http.ResponseWriter, r *http.Request) {
 func (s *server) getSong(w http.ResponseWriter, r *http.Request) {
 	idText := r.PathValue("id")
 	if idText == "" {
-		http.Error(w, "song ID is required", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "song ID is required")
 		return
 	}
 	var id pgtype.UUID
 	if err := id.Scan(idText); err != nil {
-		http.Error(w, "invalid song ID", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "invalid song ID")
 		return
 	}
-	song, err := s.queries.GetSong(r.Context(),id)
+	song, err := s.queries.GetSong(r.Context(), id)
 	if errors.Is(err, pgx.ErrNoRows) {
-		http.NotFound(w, r)
+		writeJSONError(w, http.StatusNotFound, "song not found")
 		return
 	}
 	if err != nil {
 		s.logger.Error("get songs failed", slog.String("error", err.Error()))
-		http.Error(w, "database error", http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "database error")
 		return
 	}
 
