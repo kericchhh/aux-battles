@@ -21,6 +21,8 @@ func New(queries *dbgen.Queries, logger *slog.Logger, secureCookies bool) http.H
 	mux.HandleFunc("GET /songs/{id}", app.getSong)
 	mux.HandleFunc("POST /users", app.registerUser)
 	mux.HandleFunc("POST /users/login", app.loginUser)
+	mux.HandleFunc("POST /users/logout", app.logoutUser)
+	mux.HandleFunc("GET /users/me", app.getCurrentUser)
 	return logRequests(logger, mux)
 }
 

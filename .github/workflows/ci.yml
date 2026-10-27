@@ -10,10 +10,29 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: aux
+          POSTGRES_PASSWORD: aux_dev
+          POSTGRES_DB: aux_battles
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aux -d aux_battles"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 15
+    env:
+      TEST_DATABASE_URL: postgres://aux:aux_dev@127.0.0.1:5432/aux_battles?sslmode=disable
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache-dependency-path: go.sum
+      - run: go install github.com/pressly/goose/v3/cmd/goose@v3.28.0
+      - run: |
+          "$(go env GOPATH)/bin/goose" -dir db/migrations postgres "$TEST_DATABASE_URL" up
       - run: go test ./...

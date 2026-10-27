@@ -21,6 +21,7 @@ import (
 )
 
 var usernamePattern = regexp.MustCompile(`^[a-z0-9_]{3,30}$`)
+var errUnauthenticated = errors.New("unauthenticated")
 
 type registerRequest struct {
 	Username string `json:"username"`
@@ -39,7 +40,10 @@ func (in *registerRequest) normalizeAndValidate() error {
 	if err != nil || address.Address != in.Email || len(in.Email) > 255 {
 		return errors.New("invalid email")
 	}
-	if len(in.Password) > 1024 || utf8.RuneCountInString(in.Password) < 8 {
+	if len(in.Password) > 1024 {
+		return errors.New("password is too long")
+	}
+	if utf8.RuneCountInString(in.Password) < 8 {
 		return errors.New("password must be at least 8 characters")
 	}
 	return nil
@@ -52,6 +56,7 @@ type registerResponse struct {
 }
 
 func (s *server) registerUser(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	var input registerRequest
 	if !readJSON(w, r, &input) {
 		return
@@ -82,7 +87,6 @@ func (s *server) registerUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusCreated)
 	if err := json.MarshalWrite(w, registerResponse{
 		ID:       user.ID.String(),
@@ -99,6 +103,7 @@ type loginRequest struct {
 }
 
 func (s *server) loginUser(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	var input loginRequest
 	if !readJSON(w, r, &input) {
 		return
@@ -146,12 +151,8 @@ func (s *server) loginUser(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, "could not log in")
 		return
 	}
-	cookieName := "aux_session"
-	if s.secureCookies {
-		cookieName = "__Host-aux_session"
-	}
 	http.SetCookie(w, &http.Cookie{
-		Name:     cookieName,
+		Name:     s.sessionCookieName(),
 		Value:    token,
 		Path:     "/",
 		Expires:  expiresAt,
@@ -162,7 +163,6 @@ func (s *server) loginUser(w http.ResponseWriter, r *http.Request) {
 	})
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-store")
 	if err := json.MarshalWrite(w, registerResponse{
 		ID:       user.ID.String(),
 		Username: user.Username,
@@ -170,6 +170,77 @@ func (s *server) loginUser(w http.ResponseWriter, r *http.Request) {
 	}); err != nil {
 		s.logger.Error("write login response", "error", err)
 	}
+}
+
+func (s *server) logoutUser(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	if cookie, err := r.Cookie(s.sessionCookieName()); err == nil {
+		sum := sha256.Sum256([]byte(cookie.Value))
+		if err := s.queries.DeleteSession(r.Context(), hex.EncodeToString(sum[:])); err != nil {
+			s.logger.Error("delete session", "error", err)
+			writeJSONError(w, http.StatusInternalServerError, "could not log out")
+			return
+		}
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     s.sessionCookieName(),
+		Path:     "/",
+		Expires:  time.Unix(0, 0),
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   s.secureCookies,
+		SameSite: http.SameSiteLaxMode,
+	})
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *server) currentUser(r *http.Request) (dbgen.GetValidSessionRow, error) {
+	cookie, err := r.Cookie(s.sessionCookieName())
+	if err != nil || cookie.Value == "" {
+		return dbgen.GetValidSessionRow{}, errUnauthenticated
+	}
+	sum := sha256.Sum256([]byte(cookie.Value))
+	user, err := s.queries.GetValidSession(r.Context(), hex.EncodeToString(sum[:]))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return dbgen.GetValidSessionRow{}, errUnauthenticated
+	}
+	return user, err
+}
+
+func (s *server) getCurrentUser(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+
+	user, err := s.currentUser(r)
+	if errors.Is(err, errUnauthenticated) {
+		writeJSONError(w, http.StatusUnauthorized, "not authenticated")
+		return
+	}
+	if err != nil {
+		s.logger.Error("get current user", "error", err)
+		writeJSONError(w, http.StatusInternalServerError, "could not get user")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.MarshalWrite(w, struct {
+		ID       string `json:"id"`
+		Username string `json:"username"`
+		Email    string `json:"email"`
+		Role     string `json:"role"`
+	}{
+		ID:       user.ID.String(),
+		Username: user.Username,
+		Email:    user.Email,
+		Role:     user.Role,
+	}); err != nil {
+		s.logger.Error("write current user response", "error", err)
+	}
+}
+
+func (s *server) sessionCookieName() string {
+	if s.secureCookies {
+		return "__Host-aux_session"
+	}
+	return "aux_session"
 }
 
 func newSessionToken() (token, tokenHash string, err error) {
