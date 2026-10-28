@@ -14,5 +14,27 @@ services:
       interval: 2s
       timeout: 2s
       retries: 15
+  migrate:
+    build: .
+    image: aux-battles-api:dev
+    entrypoint: ["/usr/local/bin/goose"]
+    command: ["up"]
+    environment:
+      GOOSE_DRIVER: postgres
+      GOOSE_DBSTRING: postgres://aux:aux_dev@db:5432/aux_battles?sslmode=disable
+      GOOSE_MIGRATION_DIR: /migrations
+    depends_on:
+      db:
+        condition: service_healthy
+  api:
+    build: .
+    image: aux-battles-api:dev
+    environment:
+      DATABASE_URL: postgres://aux:aux_dev@db:5432/aux_battles?sslmode=disable
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
 volumes:
   pgdata:

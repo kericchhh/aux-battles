@@ -3,8 +3,10 @@ package server
 import (
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/kericchhh/aux-battles/internal/dbgen"
+	"golang.org/x/time/rate"
 )
 
 type server struct {
@@ -14,13 +16,15 @@ type server struct {
 }
 
 func New(queries *dbgen.Queries, logger *slog.Logger, secureCookies bool) http.Handler {
+	loginLimit := newIPLimiter(rate.Every(12*time.Second), 5)
+	registerLimit := newIPLimiter(rate.Every(time.Minute), 3)
 	app := &server{queries: queries, logger: logger, secureCookies: secureCookies}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", app.health)
 	mux.HandleFunc("GET /songs", app.listSongs)
 	mux.HandleFunc("GET /songs/{id}", app.getSong)
-	mux.HandleFunc("POST /users", app.registerUser)
-	mux.HandleFunc("POST /users/login", app.loginUser)
+	mux.HandleFunc("POST /users", registerLimit.wrap(app.registerUser))
+	mux.HandleFunc("POST /users/login", loginLimit.wrap(app.loginUser))
 	mux.HandleFunc("POST /users/logout", app.logoutUser)
 	mux.HandleFunc("GET /users/me", app.getCurrentUser)
 	return logRequests(logger, mux)

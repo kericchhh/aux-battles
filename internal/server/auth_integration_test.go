@@ -103,7 +103,6 @@ func TestAuthFlowWithPostgres(t *testing.T) {
 		t.Fatalf("revoked cookie = %d, want 401", revoked.Code)
 	}
 
-	// A PostgreSQL error aborts this test transaction, so check the conflict last.
 	duplicate := authTestRequest(handler, http.MethodPost, "/users", registerBody, nil)
 	if duplicate.Code != http.StatusConflict {
 		t.Fatalf("duplicate registration = %d, want 409", duplicate.Code)

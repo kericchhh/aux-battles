@@ -2,7 +2,20 @@
 
 Backend rewrite in Go.
 
-## Run locally
+## Run with Docker
+
+From the repository root:
+
+```sh
+docker compose up --build -d
+curl http://localhost:8080/healthz
+```
+
+Compose starts PostgreSQL, applies migrations, and starts the API. The API is
+available on `http://localhost:8080`. Use `docker compose logs -f api` to view
+its logs and `docker compose down` to stop it.
+
+## Run Go on your host
 
 Install the Go version listed in `go.mod`, Docker with Compose, and
 [goose](https://github.com/pressly/goose) for database migrations. From the
@@ -17,8 +30,7 @@ go run ./cmd/api
 ```
 
 If `goose` is not found after installation, add `$(go env GOPATH)/bin` to your
-`PATH`. The API listens on `http://localhost:8080`; check it with
-`curl http://localhost:8080/healthz`.
+`PATH`.
 
 When serving over HTTPS, set `APP_ENV=production` to issue Secure session
 cookies with the `__Host-` prefix.
