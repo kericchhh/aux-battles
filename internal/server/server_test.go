@@ -14,9 +14,19 @@ import (
 func TestHealthHandler(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	New(nil, logger, false).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	New(nil, nil, logger, false).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/healthz", nil))
 	if recorder.Code != http.StatusOK || recorder.Body.String() != "ok\n" {
 		t.Fatalf("health response = %d %q", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestSongUploadRequiresAuthentication(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	handler := New(nil, nil, logger, false)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/songs", nil))
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("upload without a session = %d, want 401", response.Code)
 	}
 }
 
@@ -39,7 +49,7 @@ func TestRequestLogIncludesMethodAndPath(t *testing.T) {
 
 func TestClientErrorsUseJSON(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	handler := New(nil, logger, false)
+	handler := New(nil, nil, logger, false)
 	tests := []struct {
 		name       string
 		method     string
@@ -79,7 +89,7 @@ func TestClientErrorsUseJSON(t *testing.T) {
 
 func TestLoginRejectsMissingCredentials(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	handler := New(nil, logger, false)
+	handler := New(nil, nil, logger, false)
 	request := httptest.NewRequest(http.MethodPost, "/users/login", strings.NewReader(`{"identifier":"","password":""}`))
 	request.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()

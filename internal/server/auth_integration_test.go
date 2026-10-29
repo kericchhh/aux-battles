@@ -36,7 +36,7 @@ func TestAuthFlowWithPostgres(t *testing.T) {
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
 
-	handler := New(dbgen.New(tx), slog.New(slog.NewTextHandler(io.Discard, nil)), false)
+	handler := New(dbgen.New(tx), nil, slog.New(slog.NewTextHandler(io.Discard, nil)), false)
 	username := fmt.Sprintf("auth_%d", time.Now().UnixNano())
 	email := username + "@example.com"
 	password := "correct horse battery staple"

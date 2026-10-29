@@ -42,7 +42,7 @@ func run(logger *slog.Logger) error {
 
 	httpServer := &http.Server{
 		Addr:              ":8080",
-		Handler:           server.New(dbgen.New(pool), logger, os.Getenv("APP_ENV") == "production"),
+		Handler:           server.New(dbgen.New(pool), pool, logger, os.Getenv("APP_ENV") == "production"),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	logger.Info("API listening", slog.String("address", httpServer.Addr))

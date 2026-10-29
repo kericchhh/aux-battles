@@ -51,7 +51,7 @@ func TestIPLimiterRejectsOnlyTheExhaustedClient(t *testing.T) {
 
 func TestAuthRouteLimitersDoNotThrottleOtherRoutes(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	handler := New(nil, logger, false)
+	handler := New(nil,nil, logger, false)
 	request := func(method, path string) int {
 		r := httptest.NewRequest(method, path, strings.NewReader("{}"))
 		r.RemoteAddr = "203.0.113.10:1000"

@@ -11,6 +11,36 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const createSong = `-- name: CreateSong :one
+INSERT INTO songs (title, artist, genre, duration_seconds)
+VALUES ($1, $2, $3, $4)
+RETURNING id::text AS id, status
+`
+
+type CreateSongParams struct {
+	Title           string
+	Artist          string
+	Genre           string
+	DurationSeconds int32
+}
+
+type CreateSongRow struct {
+	ID     string
+	Status string
+}
+
+func (q *Queries) CreateSong(ctx context.Context, arg CreateSongParams) (CreateSongRow, error) {
+	row := q.db.QueryRow(ctx, createSong,
+		arg.Title,
+		arg.Artist,
+		arg.Genre,
+		arg.DurationSeconds,
+	)
+	var i CreateSongRow
+	err := row.Scan(&i.ID, &i.Status)
+	return i, err
+}
+
 const getSong = `-- name: GetSong :one
 SELECT id::text AS id, title, artist
 FROM songs
@@ -27,6 +57,33 @@ func (q *Queries) GetSong(ctx context.Context, dollar_1 pgtype.UUID) (GetSongRow
 	row := q.db.QueryRow(ctx, getSong, dollar_1)
 	var i GetSongRow
 	err := row.Scan(&i.ID, &i.Title, &i.Artist)
+	return i, err
+}
+
+const getSongStatus = `-- name: GetSongStatus :one
+SELECT id::text AS id, title, artist, status, processing_error
+FROM songs
+WHERE id = $1::uuid
+`
+
+type GetSongStatusRow struct {
+	ID              string
+	Title           string
+	Artist          string
+	Status          string
+	ProcessingError pgtype.Text
+}
+
+func (q *Queries) GetSongStatus(ctx context.Context, dollar_1 pgtype.UUID) (GetSongStatusRow, error) {
+	row := q.db.QueryRow(ctx, getSongStatus, dollar_1)
+	var i GetSongStatusRow
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Artist,
+		&i.Status,
+		&i.ProcessingError,
+	)
 	return i, err
 }
 

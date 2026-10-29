@@ -31,10 +31,14 @@ services:
     image: aux-battles-api:dev
     environment:
       DATABASE_URL: postgres://aux:aux_dev@db:5432/aux_battles?sslmode=disable
+      MEDIA_ROOT: /data/media
     ports:
       - "127.0.0.1:8080:8080"
+    volumes:
+      - "media:/data/media"
     depends_on:
       migrate:
         condition: service_completed_successfully
 volumes:
   pgdata:
+  media:

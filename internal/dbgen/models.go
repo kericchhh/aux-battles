@@ -69,6 +69,20 @@ type Song struct {
 	CreatedAt       pgtype.Timestamptz
 }
 
+type SongJob struct {
+	SongID           pgtype.UUID
+	InputPath        string
+	ClipStartSeconds float64
+	State            string
+	AttemptCount     int32
+	AvailableAt      pgtype.Timestamptz
+	LeaseExpiresAt   pgtype.Timestamptz
+	CreatedAt        pgtype.Timestamptz
+	UpdatedAt        pgtype.Timestamptz
+	StartedAt        pgtype.Timestamptz
+	FinishedAt       pgtype.Timestamptz
+}
+
 type User struct {
 	ID           pgtype.UUID
 	Username     string

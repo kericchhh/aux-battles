@@ -110,7 +110,7 @@ func (row authTestRow) Scan(dest ...any) error {
 }
 
 func authTestHandler(db *authTestDB, secure bool) http.Handler {
-	return New(dbgen.New(db), slog.New(slog.NewTextHandler(io.Discard, nil)), secure)
+	return New(dbgen.New(db), nil, slog.New(slog.NewTextHandler(io.Discard, nil)), secure)
 }
 
 func authTestRequest(handler http.Handler, method, path, body string, cookie *http.Cookie) *httptest.ResponseRecorder {
