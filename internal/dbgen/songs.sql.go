@@ -44,7 +44,7 @@ func (q *Queries) CreateSong(ctx context.Context, arg CreateSongParams) (CreateS
 const getSong = `-- name: GetSong :one
 SELECT id::text AS id, title, artist
 FROM songs
-WHERE id = $1::uuid
+WHERE id = $1::uuid AND status = 'READY'
 `
 
 type GetSongRow struct {
@@ -90,6 +90,7 @@ func (q *Queries) GetSongStatus(ctx context.Context, dollar_1 pgtype.UUID) (GetS
 const listSongs = `-- name: ListSongs :many
 SELECT id::text AS id, title, artist
 FROM songs
+WHERE status = 'READY'
 ORDER BY created_at DESC
 `
 

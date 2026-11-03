@@ -1,12 +1,13 @@
 -- name: ListSongs :many
 SELECT id::text AS id, title, artist
 FROM songs
+WHERE status = 'READY'
 ORDER BY created_at DESC;
 
 -- name: GetSong :one
 SELECT id::text AS id, title, artist
 FROM songs
-WHERE id = $1::uuid;
+WHERE id = $1::uuid AND status = 'READY';
 
 -- name: GetSongStatus :one
 SELECT id::text AS id, title, artist, status, processing_error
