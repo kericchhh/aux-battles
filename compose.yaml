@@ -39,6 +39,21 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    image: aux-battles-worker:dev
+    init: true
+    environment:
+      DATABASE_URL: postgres://aux:aux_dev@db:5432/aux_battles?sslmode=disable
+      MEDIA_ROOT: /data/media
+      WORKER_ATTEMPT_TIMEOUT: ${WORKER_ATTEMPT_TIMEOUT:-30m}
+    volumes:
+      - "media:/data/media"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
 volumes:
   pgdata:
   media:

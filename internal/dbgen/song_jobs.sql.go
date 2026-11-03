@@ -11,6 +11,95 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const claimSongJob = `-- name: ClaimSongJob :one
+WITH candidate AS (
+    SELECT song_id
+    FROM song_jobs
+    WHERE attempt_count < 3
+      AND ((state = 'QUEUED' AND available_at <= now())
+        OR (state = 'RUNNING' AND lease_expires_at <= now()))
+    ORDER BY available_at, created_at, song_id
+    LIMIT 1
+    FOR UPDATE SKIP LOCKED
+)
+UPDATE song_jobs AS job
+SET state = 'RUNNING',
+    attempt_count = job.attempt_count + 1,
+    lease_expires_at = now() + interval '10 minutes',
+    started_at = coalesce(job.started_at, now()),
+    updated_at = now()
+FROM candidate
+WHERE job.song_id = candidate.song_id
+RETURNING job.song_id::text AS song_id, job.input_path,
+    job.clip_start_seconds, job.attempt_count
+`
+
+type ClaimSongJobRow struct {
+	SongID           string
+	InputPath        string
+	ClipStartSeconds float64
+	AttemptCount     int32
+}
+
+func (q *Queries) ClaimSongJob(ctx context.Context) (ClaimSongJobRow, error) {
+	row := q.db.QueryRow(ctx, claimSongJob)
+	var i ClaimSongJobRow
+	err := row.Scan(
+		&i.SongID,
+		&i.InputPath,
+		&i.ClipStartSeconds,
+		&i.AttemptCount,
+	)
+	return i, err
+}
+
+const completeSongJob = `-- name: CompleteSongJob :one
+WITH completed AS (
+    UPDATE song_jobs
+    SET state = 'SUCCEEDED', lease_expires_at = NULL,
+        finished_at = now(), updated_at = now()
+    WHERE song_id = $6::uuid
+      AND attempt_count = $7
+      AND state = 'RUNNING'
+    RETURNING song_id
+)
+UPDATE songs AS song
+SET status = 'READY', processing_error = NULL,
+    full_song_path = $1::text,
+    drums_path = $2::text,
+    bass_path = $3::text,
+    melody_path = $4::text,
+    vocals_path = $5::text
+FROM completed
+WHERE song.id = completed.song_id
+RETURNING song.id::text AS id
+`
+
+type CompleteSongJobParams struct {
+	FullSongPath string
+	DrumsPath    string
+	BassPath     string
+	MelodyPath   string
+	VocalsPath   string
+	SongID       pgtype.UUID
+	AttemptCount int32
+}
+
+func (q *Queries) CompleteSongJob(ctx context.Context, arg CompleteSongJobParams) (string, error) {
+	row := q.db.QueryRow(ctx, completeSongJob,
+		arg.FullSongPath,
+		arg.DrumsPath,
+		arg.BassPath,
+		arg.MelodyPath,
+		arg.VocalsPath,
+		arg.SongID,
+		arg.AttemptCount,
+	)
+	var id string
+	err := row.Scan(&id)
+	return id, err
+}
+
 const enqueueSongJob = `-- name: EnqueueSongJob :exec
 INSERT INTO song_jobs (song_id, input_path, clip_start_seconds)
 VALUES ($1, $2, $3)
@@ -25,4 +114,201 @@ type EnqueueSongJobParams struct {
 func (q *Queries) EnqueueSongJob(ctx context.Context, arg EnqueueSongJobParams) error {
 	_, err := q.db.Exec(ctx, enqueueSongJob, arg.SongID, arg.InputPath, arg.ClipStartSeconds)
 	return err
+}
+
+const failExpiredSongJobs = `-- name: FailExpiredSongJobs :many
+WITH expired AS (
+    UPDATE song_jobs
+    SET state = 'FAILED', lease_expires_at = NULL,
+        finished_at = now(), updated_at = now()
+    WHERE state = 'RUNNING'
+      AND attempt_count >= 3
+      AND lease_expires_at <= now()
+    RETURNING song_id, input_path
+)
+UPDATE songs AS song
+SET status = 'FAILED',
+    processing_error = 'Song processing stopped after three attempts.'
+FROM expired
+WHERE song.id = expired.song_id
+RETURNING expired.song_id::text AS song_id, expired.input_path
+`
+
+type FailExpiredSongJobsRow struct {
+	SongID    string
+	InputPath string
+}
+
+func (q *Queries) FailExpiredSongJobs(ctx context.Context) ([]FailExpiredSongJobsRow, error) {
+	rows, err := q.db.Query(ctx, failExpiredSongJobs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FailExpiredSongJobsRow
+	for rows.Next() {
+		var i FailExpiredSongJobsRow
+		if err := rows.Scan(&i.SongID, &i.InputPath); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const failSongJob = `-- name: FailSongJob :one
+WITH failed AS (
+    UPDATE song_jobs
+    SET state = 'FAILED', lease_expires_at = NULL,
+        finished_at = now(), updated_at = now()
+    WHERE song_id = $2::uuid
+      AND attempt_count = $3
+      AND state = 'RUNNING'
+    RETURNING song_id
+)
+UPDATE songs AS song
+SET status = 'FAILED', processing_error = $1::text
+FROM failed
+WHERE song.id = failed.song_id
+RETURNING song.id::text AS id
+`
+
+type FailSongJobParams struct {
+	ProcessingError string
+	SongID          pgtype.UUID
+	AttemptCount    int32
+}
+
+func (q *Queries) FailSongJob(ctx context.Context, arg FailSongJobParams) (string, error) {
+	row := q.db.QueryRow(ctx, failSongJob, arg.ProcessingError, arg.SongID, arg.AttemptCount)
+	var id string
+	err := row.Scan(&id)
+	return id, err
+}
+
+const listSongJobMedia = `-- name: ListSongJobMedia :many
+SELECT song_id::text AS song_id, input_path, state, attempt_count, lease_expires_at
+FROM song_jobs
+`
+
+type ListSongJobMediaRow struct {
+	SongID         string
+	InputPath      string
+	State          string
+	AttemptCount   int32
+	LeaseExpiresAt pgtype.Timestamptz
+}
+
+func (q *Queries) ListSongJobMedia(ctx context.Context) ([]ListSongJobMediaRow, error) {
+	rows, err := q.db.Query(ctx, listSongJobMedia)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSongJobMediaRow
+	for rows.Next() {
+		var i ListSongJobMediaRow
+		if err := rows.Scan(
+			&i.SongID,
+			&i.InputPath,
+			&i.State,
+			&i.AttemptCount,
+			&i.LeaseExpiresAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSongOutputPaths = `-- name: ListSongOutputPaths :many
+SELECT full_song_path, drums_path, bass_path, melody_path, vocals_path
+FROM songs
+`
+
+type ListSongOutputPathsRow struct {
+	FullSongPath pgtype.Text
+	DrumsPath    pgtype.Text
+	BassPath     pgtype.Text
+	MelodyPath   pgtype.Text
+	VocalsPath   pgtype.Text
+}
+
+func (q *Queries) ListSongOutputPaths(ctx context.Context) ([]ListSongOutputPathsRow, error) {
+	rows, err := q.db.Query(ctx, listSongOutputPaths)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSongOutputPathsRow
+	for rows.Next() {
+		var i ListSongOutputPathsRow
+		if err := rows.Scan(
+			&i.FullSongPath,
+			&i.DrumsPath,
+			&i.BassPath,
+			&i.MelodyPath,
+			&i.VocalsPath,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const renewSongJob = `-- name: RenewSongJob :one
+UPDATE song_jobs
+SET lease_expires_at = now() + interval '10 minutes', updated_at = now()
+WHERE song_id = $1::uuid
+  AND attempt_count = $2
+  AND state = 'RUNNING'
+  AND lease_expires_at > now()
+RETURNING song_id::text AS song_id
+`
+
+type RenewSongJobParams struct {
+	SongID       pgtype.UUID
+	AttemptCount int32
+}
+
+func (q *Queries) RenewSongJob(ctx context.Context, arg RenewSongJobParams) (string, error) {
+	row := q.db.QueryRow(ctx, renewSongJob, arg.SongID, arg.AttemptCount)
+	var song_id string
+	err := row.Scan(&song_id)
+	return song_id, err
+}
+
+const retrySongJob = `-- name: RetrySongJob :one
+UPDATE song_jobs
+SET state = 'QUEUED', lease_expires_at = NULL,
+    available_at = now() + ($1::integer * interval '1 second'),
+    updated_at = now()
+WHERE song_id = $2::uuid
+  AND attempt_count = $3
+  AND state = 'RUNNING'
+RETURNING song_id::text AS song_id
+`
+
+type RetrySongJobParams struct {
+	DelaySeconds int32
+	SongID       pgtype.UUID
+	AttemptCount int32
+}
+
+func (q *Queries) RetrySongJob(ctx context.Context, arg RetrySongJobParams) (string, error) {
+	row := q.db.QueryRow(ctx, retrySongJob, arg.DelaySeconds, arg.SongID, arg.AttemptCount)
+	var song_id string
+	err := row.Scan(&song_id)
+	return song_id, err
 }
