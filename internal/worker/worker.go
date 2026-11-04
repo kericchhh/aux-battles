@@ -12,12 +12,30 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/kericchhh/aux-battles/internal/dbgen"
 	"github.com/kericchhh/aux-battles/internal/media"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 const (
 	pollInterval          = time.Second
 	renewInterval         = time.Minute
 	DefaultAttemptTimeout = 30 * time.Minute
+)
+
+var (
+	workerAttempts = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "aux_battles_worker_attempts_total",
+			Help: "Song processing attempts by outcome",
+		}, []string{"outcome"},
+	)
+	workerAttemptDuration = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "aux_battles_worker_attempt_duration_seconds",
+			Help:    "Time spent processing an attempt",
+			Buckets: prometheus.ExponentialBuckets(1, 2, 12),
+		},
+	)
 )
 
 type Job struct {
@@ -114,8 +132,11 @@ func (r *Runner) ProcessOne(ctx context.Context) (bool, error) {
 			logger.Error("song attempt failed", "error", err)
 		}
 	}
+	duration := time.Since(start)
+	workerAttempts.WithLabelValues(outcome).Inc()
+	workerAttemptDuration.Observe(duration.Seconds())
 	logger.Info("song attempt finished", "outcome", outcome,
-		"duration_ms", float64(time.Since(start))/float64(time.Millisecond))
+		"duration_ms", float64(duration)/float64(time.Millisecond))
 	return true, err
 }
 

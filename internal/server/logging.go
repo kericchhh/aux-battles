@@ -10,8 +10,28 @@ import (
 	"net/http"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+)
+
+var (
+	apiRequests = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "aux_battles_http_requests_total",
+			Help: "API requests by route and response status.",
+		}, []string{"route", "status"},
+	)
+	apiRequestDuration = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "aux_battles_http_request_duration_seconds",
+			Help:    "API request duration by route.",
+			Buckets: prometheus.ExponentialBuckets(0.01, 2, 13),
+		}, []string{"route"},
+	)
 )
 
 type requestLoggerKey struct{}
@@ -92,30 +112,35 @@ func logRequests(logger *slog.Logger, next http.Handler) http.Handler {
 		r = r.WithContext(context.WithValue(r.Context(), requestLoggerKey{}, requestLogger))
 		start := time.Now()
 		defer func() {
-			if recovered := recover(); recovered != nil {
-				route := r.Pattern
-				if route == "" {
-					route = "unmatched"
+			recovered := recover()
+			status := response.status
+			if status == 0 {
+				status = http.StatusOK
+				if recovered != nil {
+					status = http.StatusInternalServerError
 				}
+			}
+			route := r.Pattern
+			if route == "" {
+				route = "unmatched"
+			}
+			duration := time.Since(start)
+			if route != "GET /metrics" {
+				apiRequests.WithLabelValues(route, strconv.Itoa(status)).Inc()
+				apiRequestDuration.WithLabelValues(route).Observe(duration.Seconds())
+			}
+			if recovered != nil {
 				requestLogger.Error("request handler panicked", "method", r.Method, "route", route,
 					"panic_type", fmt.Sprintf("%T", recovered), "panic_source", panicSource())
 				panic(http.ErrAbortHandler)
 			}
+			requestLogger.Info("served request",
+				slog.String("method", r.Method),
+				slog.String("route", route),
+				slog.Int("status", status),
+				slog.Float64("duration_ms", float64(duration)/float64(time.Millisecond)),
+			)
 		}()
 		next.ServeHTTP(response, r)
-		status := response.status
-		if status == 0 {
-			status = http.StatusOK
-		}
-		route := r.Pattern
-		if route == "" {
-			route = "unmatched"
-		}
-		requestLogger.Info("served request",
-			slog.String("method", r.Method),
-			slog.String("route", route),
-			slog.Int("status", status),
-			slog.Float64("duration_ms", float64(time.Since(start))/float64(time.Millisecond)),
-		)
 	})
 }

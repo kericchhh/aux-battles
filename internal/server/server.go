@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/kericchhh/aux-battles/internal/dbgen"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"golang.org/x/time/rate"
 )
 
@@ -32,6 +33,7 @@ func New(queries *dbgen.Queries, pool *pgxpool.Pool, logger *slog.Logger, secure
 	mux.HandleFunc("POST /users/login", loginLimit.wrap(app.loginUser))
 	mux.HandleFunc("POST /users/logout", app.logoutUser)
 	mux.HandleFunc("GET /users/me", app.getCurrentUser)
+	mux.Handle("GET /metrics", promhttp.Handler())
 	return logRequests(logger, mux)
 }
 

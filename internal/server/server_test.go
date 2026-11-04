@@ -14,6 +14,9 @@ import (
 	"time"
 
 	"github.com/kericchhh/aux-battles/internal/dbgen"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
+	dto "github.com/prometheus/client_model/go"
 )
 
 func TestHealthHandler(t *testing.T) {
@@ -22,6 +25,40 @@ func TestHealthHandler(t *testing.T) {
 	New(nil, nil, logger, false).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/healthz", nil))
 	if recorder.Code != http.StatusOK || recorder.Body.String() != "ok\n" {
 		t.Fatalf("health response = %d %q", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestRequestMetricsCountNormalRequestsButNotScrapes(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	handler := New(nil, nil, logger, false)
+	beforeRequests := testutil.ToFloat64(apiRequests.WithLabelValues("GET /healthz", "200"))
+	beforeScrapes := testutil.ToFloat64(apiRequests.WithLabelValues("GET /metrics", "200"))
+	durationCount := func() uint64 {
+		t.Helper()
+		metric := &dto.Metric{}
+		observer := apiRequestDuration.WithLabelValues("GET /healthz")
+		if err := observer.(prometheus.Metric).Write(metric); err != nil {
+			t.Fatal(err)
+		}
+		return metric.GetHistogram().GetSampleCount()
+	}
+	beforeDurations := durationCount()
+
+	for _, path := range []string{"/healthz", "/metrics"} {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
+		if response.Code != http.StatusOK {
+			t.Fatalf("GET %s returned %d, want 200", path, response.Code)
+		}
+	}
+	if got := testutil.ToFloat64(apiRequests.WithLabelValues("GET /healthz", "200")); got != beforeRequests+1 {
+		t.Fatalf("health request count = %v, want %v", got, beforeRequests+1)
+	}
+	if got := durationCount(); got != beforeDurations+1 {
+		t.Fatalf("health duration count = %v, want %v", got, beforeDurations+1)
+	}
+	if got := testutil.ToFloat64(apiRequests.WithLabelValues("GET /metrics", "200")); got != beforeScrapes {
+		t.Fatalf("scrape request count = %v, want %v", got, beforeScrapes)
 	}
 }
 
@@ -141,6 +178,7 @@ func TestAuthenticationErrorLogSharesRequestID(t *testing.T) {
 }
 
 func TestPanickingHandlerLogsRequestIDWithoutPanicValue(t *testing.T) {
+	before := testutil.ToFloat64(apiRequests.WithLabelValues("GET /healthz", "500"))
 	var output bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&output, nil))
 	mux := http.NewServeMux()
@@ -172,6 +210,9 @@ func TestPanickingHandlerLogsRequestIDWithoutPanicValue(t *testing.T) {
 	}
 	if strings.Contains(output.String(), "unexpected failure") {
 		t.Fatalf("panic value leaked into log: %s", output.String())
+	}
+	if got := testutil.ToFloat64(apiRequests.WithLabelValues("GET /healthz", "500")); got != before+1 {
+		t.Fatalf("panic request count = %v, want %v", got, before+1)
 	}
 }
 

@@ -14,12 +14,23 @@ import (
 	"time"
 
 	"github.com/kericchhh/aux-battles/internal/media"
+	"github.com/prometheus/client_golang/prometheus/testutil"
+	dto "github.com/prometheus/client_model/go"
 )
 
 type processorFunc func(context.Context, Job) (AudioFiles, error)
 
 func (fn processorFunc) Process(ctx context.Context, job Job) (AudioFiles, error) {
 	return fn(ctx, job)
+}
+
+func attemptDurationCount(t *testing.T) uint64 {
+	t.Helper()
+	metric := &dto.Metric{}
+	if err := workerAttemptDuration.Write(metric); err != nil {
+		t.Fatal(err)
+	}
+	return metric.GetHistogram().GetSampleCount()
 }
 
 func TestJobCleanupErrorsIncludeJobFields(t *testing.T) {
@@ -49,6 +60,8 @@ func TestJobCleanupErrorsIncludeJobFields(t *testing.T) {
 }
 
 func TestRunnerCompletesSongAndRemovesInput(t *testing.T) {
+	beforeSuccess := testutil.ToFloat64(workerAttempts.WithLabelValues("succeeded"))
+	beforeDuration := attemptDurationCount(t)
 	pool := testPool(t)
 	root := t.TempDir()
 	input := filepath.Join(root, "incoming", "upload.mp3")
@@ -81,6 +94,12 @@ func TestRunnerCompletesSongAndRemovesInput(t *testing.T) {
 	processed, err := runner.ProcessOne(context.Background())
 	if err != nil || !processed {
 		t.Fatalf("process one = %t, %v; want true, nil", processed, err)
+	}
+	if got := testutil.ToFloat64(workerAttempts.WithLabelValues("succeeded")); got != beforeSuccess+1 {
+		t.Fatalf("successful attempt count = %v, want %v", got, beforeSuccess+1)
+	}
+	if got := attemptDurationCount(t); got != beforeDuration+1 {
+		t.Fatalf("attempt duration count = %v, want %v", got, beforeDuration+1)
 	}
 	var status, state, fullPath string
 	if err := pool.QueryRow(context.Background(), `SELECT s.status, j.state, s.full_song_path
@@ -125,6 +144,8 @@ func TestRunnerCompletesSongAndRemovesInput(t *testing.T) {
 }
 
 func TestRunnerRetriesThenMarksSongFailed(t *testing.T) {
+	beforeFailures := testutil.ToFloat64(workerAttempts.WithLabelValues("failed"))
+	beforeDuration := attemptDurationCount(t)
 	pool := testPool(t)
 	root := t.TempDir()
 	input := filepath.Join(root, "incoming", "upload.mp3")
@@ -159,6 +180,12 @@ func TestRunnerRetriesThenMarksSongFailed(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
+	}
+	if got := testutil.ToFloat64(workerAttempts.WithLabelValues("failed")); got != beforeFailures+3 {
+		t.Fatalf("failed attempt count = %v, want %v", got, beforeFailures+3)
+	}
+	if got := attemptDurationCount(t); got != beforeDuration+3 {
+		t.Fatalf("attempt duration count = %v, want %v", got, beforeDuration+3)
 	}
 	var status, state, publicError string
 	if err := pool.QueryRow(context.Background(), `SELECT s.status, j.state, s.processing_error

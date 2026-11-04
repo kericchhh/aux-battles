@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -14,6 +16,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/kericchhh/aux-battles/internal/observability"
 	"github.com/kericchhh/aux-battles/internal/worker"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"golang.org/x/sync/errgroup"
 )
 
 func main() {
@@ -71,5 +75,34 @@ func run(ctx context.Context, logger *slog.Logger) error {
 
 	logger.Info("song worker started", "media_root", mediaRoot)
 	processor := worker.NewAudioProcessor(mediaRoot, demucsBin, logger)
-	return worker.New(pool, processor, mediaRoot, logger, attemptTimeout).Run(ctx)
+	runner := worker.New(pool, processor, mediaRoot, logger, attemptTimeout)
+	metricsAddr := os.Getenv("WORKER_METRICS_ADDR")
+	if metricsAddr == "" {
+		metricsAddr = ":9091"
+	}
+	mux := http.NewServeMux()
+	mux.Handle("GET /metrics", promhttp.Handler())
+	metricsServer := &http.Server{
+		Addr:              metricsAddr,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+	group, groupCtx := errgroup.WithContext(ctx)
+	group.Go(func() error {
+		err := metricsServer.ListenAndServe()
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return fmt.Errorf("serve worker with metrics: %w", err)
+	})
+	group.Go(func() error {
+		return runner.Run(groupCtx)
+	})
+	group.Go(func() error {
+		<-groupCtx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return metricsServer.Shutdown(shutdownCtx)
+	})
+	return group.Wait()
 }
