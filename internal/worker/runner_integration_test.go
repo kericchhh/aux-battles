@@ -1,7 +1,9 @@
 package worker
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -10,12 +12,40 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/kericchhh/aux-battles/internal/media"
 )
 
 type processorFunc func(context.Context, Job) (AudioFiles, error)
 
 func (fn processorFunc) Process(ctx context.Context, job Job) (AudioFiles, error) {
 	return fn(ctx, job)
+}
+
+func TestJobCleanupErrorsIncludeJobFields(t *testing.T) {
+	root := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "outside.mp3")
+	var output bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&output, nil))
+	runner := &Runner{media: media.New(root), logger: logger}
+	job := Job{SongID: "00000000-0000-4000-8000-000000000001", AttemptCount: 2}
+	jobLogger := runner.jobLogger(job)
+	runner.removeInputWithLogger(jobLogger, outside)
+	runner.discard(jobLogger, outside)
+
+	decoder := json.NewDecoder(&output)
+	for _, message := range []string{
+		"refusing to remove input outside media directory",
+		"refusing to discard output outside media directory",
+	} {
+		var entry map[string]any
+		if err := decoder.Decode(&entry); err != nil {
+			t.Fatal(err)
+		}
+		if entry["msg"] != message || entry["song_id"] != job.SongID || entry["attempt"] != float64(job.AttemptCount) {
+			t.Fatalf("cleanup log = %v", entry)
+		}
+	}
 }
 
 func TestRunnerCompletesSongAndRemovesInput(t *testing.T) {
@@ -46,7 +76,8 @@ func TestRunnerCompletesSongAndRemovesInput(t *testing.T) {
 			DrumsPath: filepath.Join(dir, "drums.mp3"), BassPath: filepath.Join(dir, "bass.mp3"),
 			MelodyPath: filepath.Join(dir, "other.mp3"), VocalsPath: filepath.Join(dir, "vocals.mp3")}, nil
 	})
-	runner := New(pool, processor, root, slog.New(slog.NewTextHandler(io.Discard, nil)), 30*time.Minute)
+	var logOutput bytes.Buffer
+	runner := New(pool, processor, root, slog.New(slog.NewJSONHandler(&logOutput, nil)), 30*time.Minute)
 	processed, err := runner.ProcessOne(context.Background())
 	if err != nil || !processed {
 		t.Fatalf("process one = %t, %v; want true, nil", processed, err)
@@ -65,6 +96,31 @@ func TestRunnerCompletesSongAndRemovesInput(t *testing.T) {
 	}
 	if _, err := os.Stat(input); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("input remains after success: %v", err)
+	}
+	decoder := json.NewDecoder(&logOutput)
+	found := false
+	for {
+		var entry map[string]any
+		err := decoder.Decode(&entry)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if entry["msg"] != "song attempt finished" {
+			continue
+		}
+		found = true
+		if entry["song_id"] != id || entry["attempt"] != float64(1) || entry["outcome"] != "succeeded" {
+			t.Fatalf("attempt log = %v", entry)
+		}
+		if duration, ok := entry["duration_ms"].(float64); !ok || duration < 0 {
+			t.Fatalf("invalid attempt duration: %v", entry["duration_ms"])
+		}
+	}
+	if !found {
+		t.Fatalf("missing song attempt log: %s", logOutput.String())
 	}
 }
 
@@ -89,6 +145,14 @@ func TestRunnerRetriesThenMarksSongFailed(t *testing.T) {
 			t.Fatalf("attempt %d = %t, %v; want processed error", attempt, processed, err)
 		}
 		if attempt < 3 {
+			var delaySeconds float64
+			if err := pool.QueryRow(context.Background(), `SELECT EXTRACT(EPOCH FROM available_at - updated_at)::double precision
+				FROM song_jobs WHERE song_id = $1::uuid`, id).Scan(&delaySeconds); err != nil {
+				t.Fatal(err)
+			}
+			if want := float64(15 * attempt); delaySeconds != want {
+				t.Fatalf("retry delay after attempt %d = %v seconds, want %v", attempt, delaySeconds, want)
+			}
 			_, err := pool.Exec(context.Background(), `UPDATE song_jobs SET available_at = now()
 				WHERE song_id = $1::uuid`, id)
 			if err != nil {

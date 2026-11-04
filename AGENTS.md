@@ -13,6 +13,10 @@
 - When changing song processing, trace effects across the API, worker, database, and media storage. Update tests that cover changed behavior.
 - Format changed Go code with `gofmt`.
 
+## Communication
+
+- When the user says a concept or practice introduced in the conversation is unfamiliar, explain it in plain language, give a task-relevant example, and link to a reliable reference for further learning.
+
 ## Validation and handoff
 
 1. Run relevant tests and checks. Use [README.md](README.md) for local and PostgreSQL integration test setup. Report commands, results, and relevant tests that were skipped or could not run.

@@ -15,7 +15,7 @@ func (s *server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		if err != nil {
-			s.logger.Error("authenticate request failed", slog.String("error", err.Error()))
+			s.loggerFor(r.Context()).Error("authenticate request failed", slog.String("error", err.Error()))
 			writeJSONError(w, http.StatusInternalServerError, "could not authenticate request")
 			return
 		}

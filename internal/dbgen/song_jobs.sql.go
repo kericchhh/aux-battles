@@ -15,7 +15,7 @@ const claimSongJob = `-- name: ClaimSongJob :one
 WITH candidate AS (
     SELECT song_id
     FROM song_jobs
-    WHERE attempt_count < 3
+    WHERE attempt_count < $1::integer
       AND ((state = 'QUEUED' AND available_at <= now())
         OR (state = 'RUNNING' AND lease_expires_at <= now()))
     ORDER BY available_at, created_at, song_id
@@ -41,8 +41,8 @@ type ClaimSongJobRow struct {
 	AttemptCount     int32
 }
 
-func (q *Queries) ClaimSongJob(ctx context.Context) (ClaimSongJobRow, error) {
-	row := q.db.QueryRow(ctx, claimSongJob)
+func (q *Queries) ClaimSongJob(ctx context.Context, maxAttempts int32) (ClaimSongJobRow, error) {
+	row := q.db.QueryRow(ctx, claimSongJob, maxAttempts)
 	var i ClaimSongJobRow
 	err := row.Scan(
 		&i.SongID,
@@ -122,25 +122,30 @@ WITH expired AS (
     SET state = 'FAILED', lease_expires_at = NULL,
         finished_at = now(), updated_at = now()
     WHERE state = 'RUNNING'
-      AND attempt_count >= 3
+      AND attempt_count >= $2::integer
       AND lease_expires_at <= now()
     RETURNING song_id, input_path
 )
 UPDATE songs AS song
 SET status = 'FAILED',
-    processing_error = 'Song processing stopped after three attempts.'
+    processing_error = $1::text
 FROM expired
 WHERE song.id = expired.song_id
 RETURNING expired.song_id::text AS song_id, expired.input_path
 `
+
+type FailExpiredSongJobsParams struct {
+	ProcessingError string
+	MaxAttempts     int32
+}
 
 type FailExpiredSongJobsRow struct {
 	SongID    string
 	InputPath string
 }
 
-func (q *Queries) FailExpiredSongJobs(ctx context.Context) ([]FailExpiredSongJobsRow, error) {
-	rows, err := q.db.Query(ctx, failExpiredSongJobs)
+func (q *Queries) FailExpiredSongJobs(ctx context.Context, arg FailExpiredSongJobsParams) ([]FailExpiredSongJobsRow, error) {
+	rows, err := q.db.Query(ctx, failExpiredSongJobs, arg.ProcessingError, arg.MaxAttempts)
 	if err != nil {
 		return nil, err
 	}

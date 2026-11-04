@@ -72,7 +72,7 @@ func TestClaimSongJobIsExclusiveAndFencesStaleAttempt(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-start
-			job, err := queries.ClaimSongJob(context.Background())
+			job, err := queries.ClaimSongJob(context.Background(), maxAttempts)
 			results <- result{id: job.SongID, attempt: job.AttemptCount, err: err}
 		}()
 	}
@@ -102,7 +102,7 @@ func TestClaimSongJobIsExclusiveAndFencesStaleAttempt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reclaimed, err := queries.ClaimSongJob(context.Background())
+	reclaimed, err := queries.ClaimSongJob(context.Background(), maxAttempts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +138,7 @@ func TestSongJobRetriesThenFails(t *testing.T) {
 		t.Fatal(err)
 	}
 	for attempt := int32(1); attempt <= 3; attempt++ {
-		job, err := queries.ClaimSongJob(context.Background())
+		job, err := queries.ClaimSongJob(context.Background(), maxAttempts)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -181,7 +181,7 @@ func TestExpiredThirdAttemptFailsWithoutReclaim(t *testing.T) {
 	id := insertQueuedJob(t, pool, "/tmp/expired-test.mp3")
 	queries := dbgen.New(pool)
 	for attempt := int32(1); attempt <= 3; attempt++ {
-		job, err := queries.ClaimSongJob(context.Background())
+		job, err := queries.ClaimSongJob(context.Background(), maxAttempts)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -194,7 +194,9 @@ func TestExpiredThirdAttemptFailsWithoutReclaim(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	expired, err := queries.FailExpiredSongJobs(context.Background())
+	expired, err := queries.FailExpiredSongJobs(context.Background(), dbgen.FailExpiredSongJobsParams{
+		MaxAttempts: maxAttempts, ProcessingError: expiredProcessingError(),
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

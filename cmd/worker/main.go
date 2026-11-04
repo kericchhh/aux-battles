@@ -12,11 +12,16 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/kericchhh/aux-battles/internal/observability"
 	"github.com/kericchhh/aux-battles/internal/worker"
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	logger, err := observability.NewLogger(os.Stdout, "worker", os.Getenv("LOG_LEVEL"))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if err := run(ctx, logger); err != nil {
@@ -65,6 +70,6 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	}
 
 	logger.Info("song worker started", "media_root", mediaRoot)
-	processor := worker.NewAudioProcessor(mediaRoot, demucsBin)
+	processor := worker.NewAudioProcessor(mediaRoot, demucsBin, logger)
 	return worker.New(pool, processor, mediaRoot, logger, attemptTimeout).Run(ctx)
 }

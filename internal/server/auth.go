@@ -67,7 +67,7 @@ func (s *server) registerUser(w http.ResponseWriter, r *http.Request) {
 	}
 	passwordHash, err := argon2id.CreateHash(input.Password, argon2id.DefaultParams)
 	if err != nil {
-		s.logger.Error("hash password", "error", err)
+		s.loggerFor(r.Context()).Error("hash password", "error", err)
 		writeJSONError(w, http.StatusInternalServerError, "could not register user")
 		return
 	}
@@ -82,7 +82,7 @@ func (s *server) registerUser(w http.ResponseWriter, r *http.Request) {
 			writeJSONError(w, http.StatusConflict, "username or email unavailable")
 			return
 		}
-		s.logger.Error("create user", "error", err)
+		s.loggerFor(r.Context()).Error("create user", "error", err)
 		writeJSONError(w, http.StatusInternalServerError, "could not register user")
 		return
 	}
@@ -93,7 +93,7 @@ func (s *server) registerUser(w http.ResponseWriter, r *http.Request) {
 		Username: user.Username,
 		Email:    user.Email,
 	}); err != nil {
-		s.logger.Error("write registration response", "error", err)
+		s.loggerFor(r.Context()).Error("write registration response", "error", err)
 	}
 }
 
@@ -119,13 +119,13 @@ func (s *server) loginUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		s.logger.Error("find user for login", "error", err)
+		s.loggerFor(r.Context()).Error("find user for login", "error", err)
 		writeJSONError(w, http.StatusInternalServerError, "could not log in")
 		return
 	}
 	match, err := argon2id.ComparePasswordAndHash(input.Password, user.PasswordHash)
 	if err != nil {
-		s.logger.Error("verify password", "error", err)
+		s.loggerFor(r.Context()).Error("verify password", "error", err)
 		writeJSONError(w, http.StatusInternalServerError, "could not log in")
 		return
 	}
@@ -135,7 +135,7 @@ func (s *server) loginUser(w http.ResponseWriter, r *http.Request) {
 	}
 	token, tokenHash, err := newSessionToken()
 	if err != nil {
-		s.logger.Error("generate session token", "error", err)
+		s.loggerFor(r.Context()).Error("generate session token", "error", err)
 		writeJSONError(w, http.StatusInternalServerError, "could not login")
 		return
 	}
@@ -147,7 +147,7 @@ func (s *server) loginUser(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt: pgtype.Timestamptz{Time: expiresAt, Valid: true},
 	})
 	if err != nil {
-		s.logger.Error("create session", "error", err)
+		s.loggerFor(r.Context()).Error("create session", "error", err)
 		writeJSONError(w, http.StatusInternalServerError, "could not log in")
 		return
 	}
@@ -168,7 +168,7 @@ func (s *server) loginUser(w http.ResponseWriter, r *http.Request) {
 		Username: user.Username,
 		Email:    user.Email,
 	}); err != nil {
-		s.logger.Error("write login response", "error", err)
+		s.loggerFor(r.Context()).Error("write login response", "error", err)
 	}
 }
 
@@ -177,7 +177,7 @@ func (s *server) logoutUser(w http.ResponseWriter, r *http.Request) {
 	if cookie, err := r.Cookie(s.sessionCookieName()); err == nil {
 		sum := sha256.Sum256([]byte(cookie.Value))
 		if err := s.queries.DeleteSession(r.Context(), hex.EncodeToString(sum[:])); err != nil {
-			s.logger.Error("delete session", "error", err)
+			s.loggerFor(r.Context()).Error("delete session", "error", err)
 			writeJSONError(w, http.StatusInternalServerError, "could not log out")
 			return
 		}
@@ -216,7 +216,7 @@ func (s *server) getCurrentUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		s.logger.Error("get current user", "error", err)
+		s.loggerFor(r.Context()).Error("get current user", "error", err)
 		writeJSONError(w, http.StatusInternalServerError, "could not get user")
 		return
 	}
@@ -232,7 +232,7 @@ func (s *server) getCurrentUser(w http.ResponseWriter, r *http.Request) {
 		Email:    user.Email,
 		Role:     user.Role,
 	}); err != nil {
-		s.logger.Error("write current user response", "error", err)
+		s.loggerFor(r.Context()).Error("write current user response", "error", err)
 	}
 }
 

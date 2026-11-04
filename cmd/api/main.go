@@ -10,11 +10,16 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/kericchhh/aux-battles/internal/dbgen"
+	"github.com/kericchhh/aux-battles/internal/observability"
 	"github.com/kericchhh/aux-battles/internal/server"
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	logger, err := observability.NewLogger(os.Stdout, "api", os.Getenv("LOG_LEVEL"))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 	if err := run(logger); err != nil {
 		logger.Error("API stopped", slog.String("error", err.Error()))
 		os.Exit(1)
@@ -43,6 +48,7 @@ func run(logger *slog.Logger) error {
 	httpServer := &http.Server{
 		Addr:              ":8080",
 		Handler:           server.New(dbgen.New(pool), pool, logger, os.Getenv("APP_ENV") == "production"),
+		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelError),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	logger.Info("API listening", slog.String("address", httpServer.Addr))

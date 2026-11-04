@@ -8,8 +8,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/kericchhh/aux-battles/internal/dbgen"
-	"github.com/kericchhh/aux-battles/internal/media"
 )
 
 type songResponse struct {
@@ -21,7 +19,7 @@ type songResponse struct {
 func (s *server) listSongs(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.queries.ListSongs(r.Context())
 	if err != nil {
-		s.logger.Error("list songs failed", slog.String("error", err.Error()))
+		s.loggerFor(r.Context()).Error("list songs failed", slog.String("error", err.Error()))
 		writeJSONError(w, http.StatusInternalServerError, "database error")
 		return
 	}
@@ -35,7 +33,7 @@ func (s *server) listSongs(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(songs); err != nil {
-		s.logger.Error("write songs response failed", slog.String("error", err.Error()))
+		s.loggerFor(r.Context()).Error("write songs response failed", slog.String("error", err.Error()))
 	}
 }
 
@@ -51,7 +49,7 @@ func (s *server) getSong(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		s.logger.Error("get songs failed", slog.String("error", err.Error()))
+		s.loggerFor(r.Context()).Error("get songs failed", slog.String("error", err.Error()))
 		writeJSONError(w, http.StatusInternalServerError, "database error")
 		return
 	}
@@ -83,7 +81,7 @@ func (s *server) getSongStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		s.logger.Error("get song status failed", slog.String("error", err.Error()))
+		s.loggerFor(r.Context()).Error("get song status failed", slog.String("error", err.Error()))
 		writeJSONError(w, http.StatusInternalServerError, "database error")
 		return
 	}
@@ -116,74 +114,25 @@ func (s *server) uploadSong(w http.ResponseWriter, r *http.Request) {
 	in, errorStatus, err := receiveSongUpload(w, r)
 	if err != nil {
 		if errorStatus == http.StatusInternalServerError {
-			s.logger.Error("receive song upload failed", "error", err)
+			s.loggerFor(r.Context()).Error("receive song upload failed", "error", err)
 			writeJSONError(w, errorStatus, "could not upload song")
 			return
 		}
 		writeJSONError(w, errorStatus, err.Error())
 		return
 	}
-	keepFile := false
-	defer func() {
-		if !keepFile {
-			if err := media.FromEnv().RemoveInput(in.Path); err != nil {
-				s.logger.Warn("remove failed song upload", "path", in.Path, "error", err)
-			}
-		}
-	}()
-	ctx := r.Context()
-	tx, err := s.pool.Begin(ctx)
+	song, err := s.persistSongUpload(r.Context(), in)
 	if err != nil {
-		s.logger.Error("begin song upload transaction", "error", err)
 		writeJSONError(w, http.StatusInternalServerError, "could not upload song")
 		return
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	q := s.queries.WithTx(tx)
-	song, err := q.CreateSong(ctx, dbgen.CreateSongParams{
-		Title:           in.Title,
-		Artist:          in.Artist,
-		Genre:           in.Genre,
-		DurationSeconds: in.DurationSeconds,
-	})
-	if err != nil {
-		s.logger.Error("create song", "error", err)
-		writeJSONError(w, http.StatusInternalServerError, "could not upload song")
-		return
-	}
-
-	var songID pgtype.UUID
-	if err := songID.Scan(song.ID); err != nil {
-		s.logger.Error("parse created song ID", "error", err)
-		writeJSONError(w, http.StatusInternalServerError, "could not upload song")
-		return
-	}
-	if err := q.EnqueueSongJob(ctx, dbgen.EnqueueSongJobParams{
-		SongID:           songID,
-		InputPath:        in.Path,
-		ClipStartSeconds: in.ClipStartSeconds,
-	}); err != nil {
-		s.logger.Error("enqueue song", "error", err)
-		writeJSONError(w, http.StatusInternalServerError, "could not upload song")
-		return
-	}
-	if err := tx.Commit(ctx); err != nil {
-		if !errors.Is(err, pgx.ErrTxCommitRollback) {
-			keepFile = true
-			s.logger.Warn("song upload commit outcome unknown; retaining file", "song_id", song.ID, "path", in.Path)
-		}
-		s.logger.Error("commit song upload", "error", err)
-		writeJSONError(w, http.StatusInternalServerError, "could not upload song")
-		return
-	}
-	keepFile = true
+	s.loggerFor(r.Context()).Info("song queued", "song_id", song.ID)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	if err := json.NewEncoder(w).Encode(map[string]string{
 		"id": song.ID, "status": song.Status,
 	}); err != nil {
-		s.logger.Error("write song upload response", "error", err)
+		s.loggerFor(r.Context()).Error("write song upload response", "error", err)
 	}
 }

@@ -32,6 +32,7 @@ services:
     environment:
       DATABASE_URL: postgres://aux:aux_dev@db:5432/aux_battles?sslmode=disable
       MEDIA_ROOT: /data/media
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
@@ -48,6 +49,7 @@ services:
     environment:
       DATABASE_URL: postgres://aux:aux_dev@db:5432/aux_battles?sslmode=disable
       MEDIA_ROOT: /data/media
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
       WORKER_ATTEMPT_TIMEOUT: ${WORKER_ATTEMPT_TIMEOUT:-30m}
     volumes:
       - "media:/data/media"

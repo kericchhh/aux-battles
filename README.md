@@ -18,6 +18,15 @@ song worker. The API is available on `http://localhost:8080`. Use
 Demucs model cache share the `media` volume. The worker runs on CPU; the first
 song may take longer while Demucs downloads its model.
 
+Log records include the `service` (`api` or `worker`). API responses include an
+`X-Request-ID` header; the same ID appears in request completion and handler
+error logs. Completion logs record the method, route pattern, status, and
+duration in milliseconds. Worker logs use the song ID and attempt to connect
+processing events and record durations for clip extraction, Demucs execution,
+and output validation and publishing. Both programs default to `INFO` logging.
+Set `LOG_LEVEL=ERROR` when starting Go on your host or running
+`docker compose up` to show only errors.
+
 ## Run Go on your host
 
 Install the Go version listed in `go.mod`, Docker with Compose, FFmpeg, Python

@@ -22,7 +22,7 @@ func (s *server) getSongAudio(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		s.logger.Error("get song audio", "error", err)
+		s.loggerFor(r.Context()).Error("get song audio", "error", err)
 		writeJSONError(w, http.StatusInternalServerError, "audio unavailable")
 		return
 	}
@@ -45,14 +45,14 @@ func (s *server) getSongAudio(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !path.Valid {
-		s.logger.Error("ready song has no audio path", "song_id", id.String(), "part", part)
+		s.loggerFor(r.Context()).Error("ready song has no audio path", "song_id", id.String(), "part", part)
 		writeJSONError(w, http.StatusInternalServerError, "audio unavailable")
 		return
 	}
 
 	file, info, err := media.FromEnv().OpenAudio(path.String)
 	if err != nil {
-		s.logger.Error("open song audio", "song_id", id.String(), "part", part, "error", err)
+		s.loggerFor(r.Context()).Error("open song audio", "song_id", id.String(), "part", part, "error", err)
 		writeJSONError(w, http.StatusInternalServerError, "audio unavailable")
 		return
 	}

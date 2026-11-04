@@ -53,7 +53,7 @@ func TestCleanupMediaReapsCrashArtifactsAndPreservesLiveFiles(t *testing.T) {
 	activeInput := filepath.Join(root, "incoming", "active.mp3")
 	writeOldMedia(t, activeInput, false)
 	activeID := insertQueuedJob(t, pool, activeInput)
-	claimed, err := queries.ClaimSongJob(context.Background())
+	claimed, err := queries.ClaimSongJob(context.Background(), maxAttempts)
 	if err != nil || claimed.SongID != activeID {
 		t.Fatalf("claim active job = %+v, %v", claimed, err)
 	}

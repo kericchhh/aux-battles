@@ -15,7 +15,6 @@ import (
 )
 
 const (
-	maxAttempts           = 3
 	pollInterval          = time.Second
 	renewInterval         = time.Minute
 	DefaultAttemptTimeout = 30 * time.Minute
@@ -28,6 +27,13 @@ type Job struct {
 	AttemptCount     int32
 }
 
+type recordedJobFailure struct {
+	cause error
+}
+
+func (e *recordedJobFailure) Error() string { return e.cause.Error() }
+func (e *recordedJobFailure) Unwrap() error { return e.cause }
+
 type AudioFiles = media.Published
 
 type Processor interface {
@@ -35,7 +41,7 @@ type Processor interface {
 }
 
 type Runner struct {
-	queries        *dbgen.Queries
+	jobs           jobTransitions
 	processor      Processor
 	media          media.Store
 	logger         *slog.Logger
@@ -46,7 +52,8 @@ func New(pool *pgxpool.Pool, processor Processor, mediaRoot string, logger *slog
 	if attemptTimeout <= 0 {
 		attemptTimeout = DefaultAttemptTimeout
 	}
-	return &Runner{queries: dbgen.New(pool), processor: processor, media: media.New(mediaRoot), logger: logger, attemptTimeout: attemptTimeout}
+	queries := dbgen.New(pool)
+	return &Runner{jobs: jobTransitions{queries: queries}, processor: processor, media: media.New(mediaRoot), logger: logger, attemptTimeout: attemptTimeout}
 }
 
 func (r *Runner) Run(ctx context.Context) error {
@@ -64,7 +71,7 @@ func (r *Runner) Run(ctx context.Context) error {
 			nextCleanup = time.Now().Add(media.CleanupInterval)
 		}
 		processed, err := r.ProcessOne(ctx)
-		if err != nil {
+		if err != nil && !processed {
 			r.logger.Error("song worker iteration failed", "error", err)
 		}
 		if processed && err == nil {
@@ -79,30 +86,45 @@ func (r *Runner) Run(ctx context.Context) error {
 }
 
 func (r *Runner) ProcessOne(ctx context.Context) (bool, error) {
-	expired, err := r.queries.FailExpiredSongJobs(ctx)
+	expired, err := r.jobs.failExpired(ctx)
 	if err != nil {
 		return false, fmt.Errorf("fail expired jobs: %w", err)
 	}
 	for _, job := range expired {
-		r.logger.Warn("song job exhausted after lease expiry", "song_id", job.SongID)
-		r.removeInput(job.InputPath)
+		logger := r.logger.With("song_id", job.SongID)
+		logger.Error("song job exhausted after lease expiry")
+		r.removeInputWithLogger(logger, job.InputPath)
 	}
-	claimed, err := r.queries.ClaimSongJob(ctx)
+	job, err := r.jobs.claim(ctx)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
 	if err != nil {
 		return false, fmt.Errorf("claim song job: %w", err)
 	}
-	job := Job{
-		SongID: claimed.SongID, InputPath: claimed.InputPath,
-		ClipStartSeconds: claimed.ClipStartSeconds, AttemptCount: claimed.AttemptCount,
+	logger := r.jobLogger(job)
+	logger.Info("processing song")
+	start := time.Now()
+	err = r.process(ctx, job)
+	outcome := "succeeded"
+	if err != nil {
+		outcome = "failed"
+		var recorded *recordedJobFailure
+		if !errors.As(err, &recorded) {
+			logger.Error("song attempt failed", "error", err)
+		}
 	}
-	r.logger.Info("processing song", "song_id", job.SongID, "attempt", job.AttemptCount)
-	return true, r.process(ctx, job)
+	logger.Info("song attempt finished", "outcome", outcome,
+		"duration_ms", float64(time.Since(start))/float64(time.Millisecond))
+	return true, err
+}
+
+func (r *Runner) jobLogger(job Job) *slog.Logger {
+	return r.logger.With("song_id", job.SongID, "attempt", job.AttemptCount)
 }
 
 func (r *Runner) process(ctx context.Context, job Job) error {
+	logger := r.jobLogger(job)
 	var songID pgtype.UUID
 	if err := songID.Scan(job.SongID); err != nil {
 		return fmt.Errorf("parse claimed song ID: %w", err)
@@ -118,16 +140,16 @@ func (r *Runner) process(ctx context.Context, job Job) error {
 	<-done
 	select {
 	case err := <-renewResult:
-		r.discard(files.Directory)
+		r.discard(logger, files.Directory)
 		return fmt.Errorf("renew song lease: %w", err)
 	default:
 	}
 	if err := ctx.Err(); err != nil {
-		r.discard(files.Directory)
+		r.discard(logger, files.Directory)
 		return err
 	}
 	if errors.Is(workErr, context.DeadlineExceeded) {
-		r.discard(files.Directory)
+		r.discard(logger, files.Directory)
 		return r.recordFailure(ctx, job, songID, fmt.Errorf("song processing timed out: %w", workErr))
 	}
 	if processErr != nil {
@@ -136,19 +158,15 @@ func (r *Runner) process(ctx context.Context, job Job) error {
 
 	finishCtx, finishCancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer finishCancel()
-	_, err := r.queries.CompleteSongJob(finishCtx, dbgen.CompleteSongJobParams{
-		SongID: songID, AttemptCount: job.AttemptCount,
-		FullSongPath: files.FullSongPath, DrumsPath: files.DrumsPath,
-		BassPath: files.BassPath, MelodyPath: files.MelodyPath, VocalsPath: files.VocalsPath,
-	})
+	err := r.jobs.complete(finishCtx, songID, job.AttemptCount, files)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			r.discard(files.Directory)
+			r.discard(logger, files.Directory)
 		}
 		return fmt.Errorf("complete song job: %w", err)
 	}
-	r.removeInput(job.InputPath)
-	r.logger.Info("song ready", "song_id", job.SongID)
+	r.removeInputWithLogger(logger, job.InputPath)
+	logger.Info("song ready")
 	return nil
 }
 
@@ -161,7 +179,7 @@ func (r *Runner) renewLease(ctx context.Context, cancel context.CancelFunc, id p
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			_, err := r.queries.RenewSongJob(ctx, dbgen.RenewSongJobParams{SongID: id, AttemptCount: attempt})
+			err := r.jobs.renew(ctx, id, attempt)
 			if err != nil {
 				if ctx.Err() != nil {
 					return
@@ -177,48 +195,42 @@ func (r *Runner) renewLease(ctx context.Context, cancel context.CancelFunc, id p
 func (r *Runner) recordFailure(parent context.Context, job Job, id pgtype.UUID, cause error) error {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), 5*time.Second)
 	defer cancel()
-	if job.AttemptCount < maxAttempts {
-		_, err := r.queries.RetrySongJob(ctx, dbgen.RetrySongJobParams{
-			SongID: id, AttemptCount: job.AttemptCount,
-			DelaySeconds: 15 * job.AttemptCount,
-		})
-		if err != nil {
-			return fmt.Errorf("retry song job after %v: %w", cause, err)
-		}
-		r.logger.Warn("song processing will retry", "song_id", job.SongID,
-			"attempt", job.AttemptCount, "error", cause)
-		return cause
-	}
-	_, err := r.queries.FailSongJob(ctx, dbgen.FailSongJobParams{
-		SongID: id, AttemptCount: job.AttemptCount,
-		ProcessingError: "Song processing failed after three attempts.",
-	})
+	terminal, err := r.jobs.fail(ctx, id, job.AttemptCount, cause)
 	if err != nil {
-		return fmt.Errorf("fail song job after %v: %w", cause, err)
+		return err
 	}
-	r.removeInput(job.InputPath)
-	r.logger.Error("song processing failed", "song_id", job.SongID, "error", cause)
-	return cause
+	if !terminal {
+		r.jobLogger(job).Info("song processing will retry", "error", cause)
+		return &recordedJobFailure{cause: cause}
+	}
+	logger := r.jobLogger(job)
+	r.removeInputWithLogger(logger, job.InputPath)
+	logger.Error("song processing failed", "error", cause)
+	return &recordedJobFailure{cause: cause}
 }
 
 func (r *Runner) removeInput(path string) {
+	r.removeInputWithLogger(r.logger, path)
+}
+
+func (r *Runner) removeInputWithLogger(logger *slog.Logger, path string) {
 	err := r.media.RemoveInput(path)
 	if errors.Is(err, media.ErrOutsideMedia) {
-		r.logger.Warn("refusing to remove input outside media directory", "path", path)
+		logger.Error("refusing to remove input outside media directory", "path", path)
 		return
 	}
 	if err != nil {
-		r.logger.Warn("remove song input", "path", path, "error", err)
+		logger.Error("remove song input", "path", path, "error", err)
 	}
 }
 
-func (r *Runner) discard(directory string) {
+func (r *Runner) discard(logger *slog.Logger, directory string) {
 	err := r.media.DiscardOutput(directory)
 	if errors.Is(err, media.ErrOutsideMedia) {
-		r.logger.Warn("refusing to discard output outside media directory", "path", directory)
+		logger.Error("refusing to discard output outside media directory", "path", directory)
 		return
 	}
 	if err != nil {
-		r.logger.Warn("discard unpublished song output", "path", directory, "error", err)
+		logger.Error("discard unpublished song output", "path", directory, "error", err)
 	}
 }

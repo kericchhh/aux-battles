@@ -6,7 +6,7 @@ VALUES ($1, $2, $3);
 WITH candidate AS (
     SELECT song_id
     FROM song_jobs
-    WHERE attempt_count < 3
+    WHERE attempt_count < sqlc.arg(max_attempts)::integer
       AND ((state = 'QUEUED' AND available_at <= now())
         OR (state = 'RUNNING' AND lease_expires_at <= now()))
     ORDER BY available_at, created_at, song_id
@@ -86,13 +86,13 @@ WITH expired AS (
     SET state = 'FAILED', lease_expires_at = NULL,
         finished_at = now(), updated_at = now()
     WHERE state = 'RUNNING'
-      AND attempt_count >= 3
+      AND attempt_count >= sqlc.arg(max_attempts)::integer
       AND lease_expires_at <= now()
     RETURNING song_id, input_path
 )
 UPDATE songs AS song
 SET status = 'FAILED',
-    processing_error = 'Song processing stopped after three attempts.'
+    processing_error = sqlc.arg(processing_error)::text
 FROM expired
 WHERE song.id = expired.song_id
 RETURNING expired.song_id::text AS song_id, expired.input_path;
