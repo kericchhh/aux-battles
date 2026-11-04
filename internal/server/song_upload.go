@@ -9,13 +9,13 @@ import (
 	"math"
 	"mime"
 	"net/http"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/kericchhh/aux-battles/internal/media"
 )
 
 const (
@@ -76,32 +76,21 @@ func receiveSongUpload(w http.ResponseWriter, r *http.Request) (validatedSongUpl
 		return empty, http.StatusBadRequest, errors.New("invalid clip start")
 	}
 
-	mediaRoot := os.Getenv("MEDIA_ROOT")
-	if mediaRoot == "" {
-		mediaRoot = "storage"
-	}
-	incomingDir, err := filepath.Abs(filepath.Join(mediaRoot, "incoming"))
-	if err != nil {
-		return empty, http.StatusInternalServerError, fmt.Errorf("resolve media directory: %w", err)
-	}
-	if err := os.MkdirAll(incomingDir, 0750); err != nil {
-		return empty, http.StatusInternalServerError, fmt.Errorf("create media directory: %w", err)
-	}
-
 	source, err := files[0].Open()
 	if err != nil {
 		return empty, http.StatusInternalServerError, fmt.Errorf("open uploaded file: %w", err)
 	}
 	defer source.Close()
-	target, err := os.CreateTemp(incomingDir, "song-*.mp3")
+	store := media.FromEnv()
+	target, err := store.CreateInput()
 	if err != nil {
-		return empty, http.StatusInternalServerError, fmt.Errorf("save uploaded file: %w", err)
+		return empty, http.StatusInternalServerError, err
 	}
 	path := target.Name()
 	keepFile := false
 	defer func() {
 		if !keepFile {
-			_ = os.Remove(path)
+			_ = store.RemoveInput(path)
 		}
 	}()
 

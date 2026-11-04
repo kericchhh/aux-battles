@@ -54,6 +54,10 @@ to change it. The worker also checks the media volume at startup and hourly,
 removing old abandoned attempts and inputs while preserving active attempts
 and files referenced by songs.
 
+Signed-in clients can fetch a ready song at `GET /songs/{id}/audio/{part}`.
+`part` is `full`, `drums`, `bass`, `melody`, or `vocals`. The response is MP3
+audio and supports HTTP byte ranges.
+
 If `goose` is not found after installation, add `$(go env GOPATH)/bin` to your
 `PATH`.
 

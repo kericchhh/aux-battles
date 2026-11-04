@@ -5,11 +5,11 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"os"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/kericchhh/aux-battles/internal/dbgen"
+	"github.com/kericchhh/aux-battles/internal/media"
 )
 
 type songResponse struct {
@@ -126,7 +126,7 @@ func (s *server) uploadSong(w http.ResponseWriter, r *http.Request) {
 	keepFile := false
 	defer func() {
 		if !keepFile {
-			if err := os.Remove(in.Path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			if err := media.FromEnv().RemoveInput(in.Path); err != nil {
 				s.logger.Warn("remove failed song upload", "path", in.Path, "error", err)
 			}
 		}

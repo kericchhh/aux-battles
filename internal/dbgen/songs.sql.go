@@ -41,6 +41,33 @@ func (q *Queries) CreateSong(ctx context.Context, arg CreateSongParams) (CreateS
 	return i, err
 }
 
+const getReadySongAudio = `-- name: GetReadySongAudio :one
+SELECT full_song_path, drums_path, bass_path, melody_path, vocals_path
+FROM songs
+WHERE id = $1::uuid AND status = 'READY'
+`
+
+type GetReadySongAudioRow struct {
+	FullSongPath pgtype.Text
+	DrumsPath    pgtype.Text
+	BassPath     pgtype.Text
+	MelodyPath   pgtype.Text
+	VocalsPath   pgtype.Text
+}
+
+func (q *Queries) GetReadySongAudio(ctx context.Context, dollar_1 pgtype.UUID) (GetReadySongAudioRow, error) {
+	row := q.db.QueryRow(ctx, getReadySongAudio, dollar_1)
+	var i GetReadySongAudioRow
+	err := row.Scan(
+		&i.FullSongPath,
+		&i.DrumsPath,
+		&i.BassPath,
+		&i.MelodyPath,
+		&i.VocalsPath,
+	)
+	return i, err
+}
+
 const getSong = `-- name: GetSong :one
 SELECT id::text AS id, title, artist
 FROM songs

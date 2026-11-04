@@ -27,6 +27,7 @@ func New(queries *dbgen.Queries, pool *pgxpool.Pool, logger *slog.Logger, secure
 	mux.HandleFunc("POST /songs", app.requireAuth(app.uploadSong))
 	mux.HandleFunc("GET /songs/{id}", app.getSong)
 	mux.HandleFunc("GET /songs/{id}/status", app.requireAuth(app.getSongStatus))
+	mux.HandleFunc("GET /songs/{id}/audio/{part}", app.requireAuth(app.getSongAudio))
 	mux.HandleFunc("POST /users", registerLimit.wrap(app.registerUser))
 	mux.HandleFunc("POST /users/login", loginLimit.wrap(app.loginUser))
 	mux.HandleFunc("POST /users/logout", app.logoutUser)

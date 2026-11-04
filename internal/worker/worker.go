@@ -5,15 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/kericchhh/aux-battles/internal/dbgen"
+	"github.com/kericchhh/aux-battles/internal/media"
 )
 
 const (
@@ -30,14 +28,7 @@ type Job struct {
 	AttemptCount     int32
 }
 
-type AudioFiles struct {
-	Directory    string
-	FullSongPath string
-	DrumsPath    string
-	BassPath     string
-	MelodyPath   string
-	VocalsPath   string
-}
+type AudioFiles = media.Published
 
 type Processor interface {
 	Process(context.Context, Job) (AudioFiles, error)
@@ -46,7 +37,7 @@ type Processor interface {
 type Runner struct {
 	queries        *dbgen.Queries
 	processor      Processor
-	mediaRoot      string
+	media          media.Store
 	logger         *slog.Logger
 	attemptTimeout time.Duration
 }
@@ -55,7 +46,7 @@ func New(pool *pgxpool.Pool, processor Processor, mediaRoot string, logger *slog
 	if attemptTimeout <= 0 {
 		attemptTimeout = DefaultAttemptTimeout
 	}
-	return &Runner{queries: dbgen.New(pool), processor: processor, mediaRoot: mediaRoot, logger: logger, attemptTimeout: attemptTimeout}
+	return &Runner{queries: dbgen.New(pool), processor: processor, media: media.New(mediaRoot), logger: logger, attemptTimeout: attemptTimeout}
 }
 
 func (r *Runner) Run(ctx context.Context) error {
@@ -70,7 +61,7 @@ func (r *Runner) Run(ctx context.Context) error {
 			if err := r.CleanupMedia(ctx); err != nil {
 				r.logger.Error("media cleanup failed", "error", err)
 			}
-			nextCleanup = time.Now().Add(mediaCleanupInterval)
+			nextCleanup = time.Now().Add(media.CleanupInterval)
 		}
 		processed, err := r.ProcessOne(ctx)
 		if err != nil {
@@ -211,30 +202,23 @@ func (r *Runner) recordFailure(parent context.Context, job Job, id pgtype.UUID, 
 }
 
 func (r *Runner) removeInput(path string) {
-	if !pathWithin(filepath.Join(r.mediaRoot, "incoming"), path) {
+	err := r.media.RemoveInput(path)
+	if errors.Is(err, media.ErrOutsideMedia) {
 		r.logger.Warn("refusing to remove input outside media directory", "path", path)
 		return
 	}
-	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err != nil {
 		r.logger.Warn("remove song input", "path", path, "error", err)
 	}
 }
 
 func (r *Runner) discard(directory string) {
-	if directory == "" {
-		return
-	}
-	if !pathWithin(filepath.Join(r.mediaRoot, "songs"), directory) {
+	err := r.media.DiscardOutput(directory)
+	if errors.Is(err, media.ErrOutsideMedia) {
 		r.logger.Warn("refusing to discard output outside media directory", "path", directory)
 		return
 	}
-	if err := os.RemoveAll(directory); err != nil {
+	if err != nil {
 		r.logger.Warn("discard unpublished song output", "path", directory, "error", err)
 	}
-}
-
-func pathWithin(root, path string) bool {
-	relative, err := filepath.Rel(root, path)
-	return err == nil && relative != "." && relative != ".." &&
-		!strings.HasPrefix(relative, ".."+string(filepath.Separator)) && !filepath.IsAbs(relative)
 }
