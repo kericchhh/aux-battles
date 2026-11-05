@@ -55,8 +55,10 @@ The API exports `aux_battles_http_requests_total` by route and status and
 `aux_battles_worker_attempt_duration_seconds`. A failed attempt may be retried,
 so the attempt counter does not count distinct failed songs. Attempts are
 counted when processing returns; a worker crash is not recorded as a failed
-attempt. The dashboard currently shows scrape status and Go process metrics;
-the application metrics are available for additional panels.
+attempt. The dashboard shows scrape status, Go process metrics, API request
+rate, 5xx percentage and latency, and completed worker attempts and duration.
+See the [worker unavailable runbook](docs/runbooks/worker-unavailable.md) for
+a local failure and recovery drill.
 
 The dashboard JSON in `observability/grafana/dashboards/` is the provisioned
 source. After changing the dashboard in Grafana, export it as a V2 Resource JSON
