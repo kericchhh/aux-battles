@@ -131,3 +131,12 @@ goose -dir db/migrations postgres "$TEST_DATABASE_URL" up
 goose -dir db/migrations postgres "$TEST_WORKER_DATABASE_URL" up
 go test ./...
 ```
+
+## CI
+
+Pushes and pull requests to `main` run the Go build, `go vet`, and the full
+test suite with the race detector against two migrated PostgreSQL test
+databases. A parallel job checks the Compose configuration, Grafana dashboard
+JSON syntax, and Prometheus configuration. The observability checks validate
+configuration files; they do not start the monitoring stack or test dashboard
+queries against live metrics.
