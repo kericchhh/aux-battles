@@ -14,6 +14,7 @@ services:
       interval: 2s
       timeout: 2s
       retries: 15
+
   migrate:
     build: .
     image: aux-battles-api:dev
@@ -26,6 +27,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
+
   api:
     build: .
     image: aux-battles-api:dev
@@ -40,6 +42,7 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+
   worker:
     build:
       context: .
@@ -56,6 +59,7 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+
   prometheus:
     image: prom/prometheus:v3.15.1
     profiles: [observability]
@@ -64,6 +68,7 @@ services:
     volumes:
       - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
+
   grafana:
     image: grafana/grafana:13.3.0
     profiles: [observability]
@@ -76,8 +81,36 @@ services:
       - ./observability/grafana/dashboards:/etc/grafana/dashboards:ro
       - ./observability/grafana/provisioning/alerting:/etc/grafana/provisioning/alerting:ro
 
+  loki:
+    image: grafana/loki:3.7.9
+    profiles: [observability]
+    command: -config.file=/etc/loki/config.yml
+    ports:
+      - "127.0.0.1:3100:3100"
+    volumes:
+      - ./observability/loki.yml:/etc/loki/config.yml:ro
+      - loki_data:/loki
+
+  alloy:
+    image: grafana/alloy:v1.21.2
+    profiles: [observability]
+    command:
+      - run
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    environment:
+      COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME}
+    volumes:
+      - ./observability/alloy.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy_data:/var/lib/alloy/data
+    depends_on:
+      - loki
+
 volumes:
   pgdata:
   media:
   prometheus_data:
   grafana_data:
+  loki_data:
+  alloy_data:

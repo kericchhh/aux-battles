@@ -18,52 +18,18 @@ song worker. The API is available on `http://localhost:8080`. Use
 Demucs model cache share the `media` volume. The worker runs on CPU; the first
 song may take longer while Demucs downloads its model.
 
-Log records include the `service` (`api` or `worker`). API responses include an
-`X-Request-ID` header; the same ID appears in request completion and handler
-error logs. Completion logs record the method, route pattern, status, and
-duration in milliseconds. Worker logs use the song ID and attempt to connect
-processing events and record durations for clip extraction, Demucs execution,
-and output validation and publishing. Both programs default to `INFO` logging.
-Set `LOG_LEVEL=ERROR` when starting Go on your host or running
-`docker compose up` to show only errors.
-
 ## Observe locally
 
-Start the API, worker, Prometheus, and Grafana with the observability profile:
+Start the API, worker, Prometheus, Grafana, Loki, and Alloy:
 
 ```sh
 docker compose --profile observability up --build -d
 ```
 
-Open [Prometheus targets](http://localhost:9090/targets) to check the `api`,
-`worker`, and `prometheus` scrapes. Prometheus collects metrics every 15 seconds.
-The API exposes `http://localhost:8080/metrics`; Prometheus reaches the worker's
-metrics endpoint at `worker:9091/metrics` on the Compose network.
-
-The metrics endpoints have no authentication. Compose binds the published ports
-to localhost and does not publish the worker metrics port. Restrict access to
-these endpoints if you run the programs outside this local setup.
-
-Open [Grafana](http://localhost:3000) and sign in with `admin` / `admin`. Grafana loads the Prometheus data source
-and the API and Worker Overview dashboard from `observability/grafana/`.
-Prometheus samples and Grafana settings persist in the `prometheus_data` and
-`grafana_data` volumes.
-
-The API exports `aux_battles_http_requests_total` by route and status and
-`aux_battles_http_request_duration_seconds`. The worker exports
-`aux_battles_worker_attempts_total` by outcome and
-`aux_battles_worker_attempt_duration_seconds`. A failed attempt may be retried,
-so the attempt counter does not count distinct failed songs. Attempts are
-counted when processing returns; a worker crash is not recorded as a failed
-attempt. The dashboard shows scrape status, Go process metrics, API request
-rate, 5xx percentage and latency, and completed worker attempts and duration.
-See the [worker unavailable runbook](docs/runbooks/worker-unavailable.md) for
-a local failure and recovery drill.
-
-The dashboard JSON in `observability/grafana/dashboards/` is the provisioned
-source. After changing the dashboard in Grafana, export it as a V2 Resource JSON
-file to that directory so a fresh Compose run uses the same version. Grafana's
-file provider can replace UI changes with the JSON version on restart.
+Open [Grafana](http://localhost:3000) for dashboards and logs, or check
+[Prometheus targets](http://localhost:9090/targets). See the
+[observability guide](docs/observability.md) for queries, configuration,
+retention, and local access details.
 
 ## Run Go on your host
 
