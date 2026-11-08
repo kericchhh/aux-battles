@@ -20,6 +20,11 @@ type jobTransitions struct {
 	queries *dbgen.Queries
 }
 
+func (j jobTransitions) readyQueueStats(ctx context.Context) (int64, float64, error) {
+	stats, err := j.queries.GetReadyQueueStats(ctx, maxAttempts)
+	return stats.ReadyJobs, stats.OldestWaitSeconds, err
+}
+
 func (j jobTransitions) failExpired(ctx context.Context) ([]dbgen.FailExpiredSongJobsRow, error) {
 	return j.queries.FailExpiredSongJobs(ctx, dbgen.FailExpiredSongJobsParams{
 		MaxAttempts:     maxAttempts,

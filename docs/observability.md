@@ -3,7 +3,7 @@
 The Compose `observability` profile starts Prometheus, Grafana, Loki, and Alloy
 alongside the API and worker. Prometheus scrapes metrics from the Go processes.
 Alloy reads their JSON logs from Docker and sends them to Loki. Grafana queries
-Prometheus for the dashboard and alert, and Loki for log searches.
+Prometheus for the dashboard and alerts, and Loki for log searches.
 
 ## Start and verify
 
@@ -18,7 +18,8 @@ Open [Prometheus targets](http://localhost:9090/targets) and check that `api`,
 fresh Grafana volume, sign in with `admin` / `admin`; an existing volume keeps
 its configured credentials. Grafana provisions the Prometheus and Loki data
 sources, the **API and Worker Overview** dashboard, and the **Worker
-Unavailable** alert.
+Unavailable**, **Worker Loop Unhealthy**, and **Song Queue Waiting Too Long**
+alerts.
 
 Once the services have started, check Loki readiness and generate an API log
 entry:
@@ -56,6 +57,17 @@ so the attempt counter does not count distinct failed songs. Attempts are
 counted when processing returns; a worker crash is not recorded as a failed
 attempt. The [worker unavailable runbook](runbooks/worker-unavailable.md)
 explains the alert and a local failure and recovery drill.
+
+Every 15 seconds, the worker also samples jobs ready to be claimed, including
+while audio processing is active. It exports
+`aux_battles_worker_iteration_operational`,
+`aux_battles_worker_queue_sample_success`, `aux_battles_worker_ready_jobs`, and
+`aux_battles_worker_oldest_ready_job_wait_seconds`. The first two are 0 or 1;
+the queue values reset to 0 when sampling fails, so check the sample-success
+metric before interpreting an empty queue. Grafana alerts when either worker
+health signal stays at 0 for two minutes or the oldest ready job waits over an
+hour for five minutes. See the [song queue runbook](runbooks/song-queue-unhealthy.md)
+for diagnosis and recovery.
 
 ## Logs
 

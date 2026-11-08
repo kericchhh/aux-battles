@@ -53,3 +53,99 @@ groups:
           execErrState: Error
           for: 2m
           isPaused: false
+        - uid: aux_worker_loop_unhealthy
+          title: Worker Loop Unhealthy
+          condition: C
+          data:
+            - refId: A
+              relativeTimeRange:
+                from: 600
+                to: 0
+              datasourceUid: cg3af1x01q2gwf
+              model:
+                editorMode: code
+                expr: '((min(aux_battles_worker_iteration_operational{job="worker"}) or vector(0)) * (min(aux_battles_worker_queue_sample_success{job="worker"}) or vector(0))) and on() (max(up{job="worker"}) == 1)'
+                instant: true
+                intervalMs: 1000
+                legendFormat: __auto
+                maxDataPoints: 43200
+                range: false
+                refId: A
+            - refId: C
+              queryType: expression
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 1
+                        type: lt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - C
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: A
+                intervalMs: 1000
+                maxDataPoints: 43200
+                refId: C
+                type: threshold
+          noDataState: OK
+          execErrState: Error
+          for: 2m
+          isPaused: false
+        - uid: aux_song_queue_waiting
+          title: Song Queue Waiting Too Long
+          condition: C
+          data:
+            - refId: A
+              relativeTimeRange:
+                from: 600
+                to: 0
+              datasourceUid: cg3af1x01q2gwf
+              model:
+                editorMode: code
+                expr: aux_battles_worker_oldest_ready_job_wait_seconds{job="worker"}
+                instant: true
+                intervalMs: 1000
+                legendFormat: __auto
+                maxDataPoints: 43200
+                range: false
+                refId: A
+            - refId: C
+              queryType: expression
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 3600
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - C
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: A
+                intervalMs: 1000
+                maxDataPoints: 43200
+                refId: C
+                type: threshold
+          noDataState: OK
+          execErrState: Error
+          for: 5m
+          isPaused: false

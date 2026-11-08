@@ -99,6 +99,9 @@ func run(ctx context.Context, logger *slog.Logger) error {
 		return runner.Run(groupCtx)
 	})
 	group.Go(func() error {
+		return runner.MonitorQueue(groupCtx)
+	})
+	group.Go(func() error {
 		<-groupCtx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()

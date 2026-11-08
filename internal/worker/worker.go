@@ -18,6 +18,9 @@ import (
 
 const (
 	pollInterval          = time.Second
+	maxPollBackoff        = 30 * time.Second
+	queueSampleInterval   = 15 * time.Second
+	queueSampleTimeout    = 5 * time.Second
 	renewInterval         = time.Minute
 	DefaultAttemptTimeout = 30 * time.Minute
 )
@@ -36,6 +39,22 @@ var (
 			Buckets: prometheus.ExponentialBuckets(1, 2, 12),
 		},
 	)
+	workerQueueSampleSuccess = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "aux_battles_worker_queue_sample_success",
+		Help: "Whether the last worker queue sample succeeded.",
+	})
+	workerIterationOperational = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "aux_battles_worker_iteration_operational",
+		Help: "Whether the last worker iteration reached a recorded job state or found no job.",
+	})
+	workerReadyJobs = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "aux_battles_worker_ready_jobs",
+		Help: "Queued or expired running song jobs eligible for processing.",
+	})
+	workerOldestReadyJobWait = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "aux_battles_worker_oldest_ready_job_wait_seconds",
+		Help: "Seconds since the oldest eligible queued job became available or running job lease expired.",
+	})
 )
 
 type Job struct {
@@ -75,8 +94,7 @@ func New(pool *pgxpool.Pool, processor Processor, mediaRoot string, logger *slog
 }
 
 func (r *Runner) Run(ctx context.Context) error {
-	ticker := time.NewTicker(pollInterval)
-	defer ticker.Stop()
+	backoff := pollInterval
 	nextCleanup := time.Time{}
 	for {
 		if err := ctx.Err(); err != nil {
@@ -89,11 +107,52 @@ func (r *Runner) Run(ctx context.Context) error {
 			nextCleanup = time.Now().Add(media.CleanupInterval)
 		}
 		processed, err := r.ProcessOne(ctx)
+		if ctx.Err() != nil {
+			return nil
+		}
+		wait := pollInterval
 		if err != nil && !processed {
-			r.logger.Error("song worker iteration failed", "error", err)
+			wait = backoff
+			r.logger.Error("song worker iteration failed", "error", err, "retry_in", wait.String())
+			backoff = min(backoff*2, maxPollBackoff)
+		} else {
+			backoff = pollInterval
 		}
 		if processed && err == nil {
 			continue
+		}
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(wait):
+		}
+	}
+}
+
+func (r *Runner) MonitorQueue(ctx context.Context) error {
+	ticker := time.NewTicker(queueSampleInterval)
+	defer ticker.Stop()
+	hadFailure := false
+	for {
+		if ctx.Err() != nil {
+			return nil
+		}
+		sampleCtx, cancel := context.WithTimeout(ctx, queueSampleTimeout)
+		err := r.sampleQueue(sampleCtx)
+		cancel()
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
+			if !hadFailure {
+				r.logger.Error("worker queue sample failed", "error", err)
+				hadFailure = true
+			}
+		} else {
+			if hadFailure {
+				r.logger.Info("worker queue sampling recovered")
+				hadFailure = false
+			}
 		}
 		select {
 		case <-ctx.Done():
@@ -103,9 +162,24 @@ func (r *Runner) Run(ctx context.Context) error {
 	}
 }
 
+func (r *Runner) sampleQueue(ctx context.Context) error {
+	readyJobs, oldestWait, err := r.jobs.readyQueueStats(ctx)
+	if err != nil {
+		workerQueueSampleSuccess.Set(0)
+		workerReadyJobs.Set(0)
+		workerOldestReadyJobWait.Set(0)
+		return err
+	}
+	workerQueueSampleSuccess.Set(1)
+	workerReadyJobs.Set(float64(readyJobs))
+	workerOldestReadyJobWait.Set(oldestWait)
+	return nil
+}
+
 func (r *Runner) ProcessOne(ctx context.Context) (bool, error) {
 	expired, err := r.jobs.failExpired(ctx)
 	if err != nil {
+		workerIterationOperational.Set(0)
 		return false, fmt.Errorf("fail expired jobs: %w", err)
 	}
 	for _, job := range expired {
@@ -115,11 +189,14 @@ func (r *Runner) ProcessOne(ctx context.Context) (bool, error) {
 	}
 	job, err := r.jobs.claim(ctx)
 	if errors.Is(err, pgx.ErrNoRows) {
+		workerIterationOperational.Set(1)
 		return false, nil
 	}
 	if err != nil {
+		workerIterationOperational.Set(0)
 		return false, fmt.Errorf("claim song job: %w", err)
 	}
+	workerIterationOperational.Set(1)
 	logger := r.jobLogger(job)
 	logger.Info("processing song")
 	start := time.Now()
@@ -129,6 +206,7 @@ func (r *Runner) ProcessOne(ctx context.Context) (bool, error) {
 		outcome = "failed"
 		var recorded *recordedJobFailure
 		if !errors.As(err, &recorded) {
+			workerIterationOperational.Set(0)
 			logger.Error("song attempt failed", "error", err)
 		}
 	}

@@ -213,3 +213,39 @@ func TestExpiredThirdAttemptFailsWithoutReclaim(t *testing.T) {
 		t.Fatalf("expired final attempt = %s/%s, want FAILED/FAILED", songStatus, jobState)
 	}
 }
+
+func TestReadyQueueStatsMatchesClaimableJobs(t *testing.T) {
+	pool := testPool(t)
+	readyID := insertQueuedJob(t, pool, "/tmp/ready-queue-test.mp3")
+	delayedID := insertQueuedJob(t, pool, "/tmp/delayed-queue-test.mp3")
+	expiredID := insertQueuedJob(t, pool, "/tmp/expired-queue-test.mp3")
+	exhaustedID := insertQueuedJob(t, pool, "/tmp/exhausted-queue-test.mp3")
+	_, err := pool.Exec(context.Background(), `UPDATE song_jobs SET available_at = now() - interval '2 minutes'
+		WHERE song_id = $1::uuid`, readyID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = pool.Exec(context.Background(), `UPDATE song_jobs SET available_at = now() + interval '1 hour'
+		WHERE song_id = $1::uuid`, delayedID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = pool.Exec(context.Background(), `UPDATE song_jobs SET state = 'RUNNING',
+		attempt_count = 1, lease_expires_at = now() - interval '3 minutes'
+		WHERE song_id = $1::uuid`, expiredID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = pool.Exec(context.Background(), `UPDATE song_jobs SET attempt_count = $2
+		WHERE song_id = $1::uuid`, exhaustedID, maxAttempts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stats, err := dbgen.New(pool).GetReadyQueueStats(context.Background(), maxAttempts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.ReadyJobs != 2 || stats.OldestWaitSeconds < 180 || stats.OldestWaitSeconds > 190 {
+		t.Fatalf("ready queue stats = %+v, want two claimable jobs with the oldest waiting about three minutes", stats)
+	}
+}

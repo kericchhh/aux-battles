@@ -104,3 +104,13 @@ FROM song_jobs;
 -- name: ListSongOutputPaths :many
 SELECT full_song_path, drums_path, bass_path, melody_path, vocals_path
 FROM songs;
+
+-- name: GetReadyQueueStats :one
+SELECT count(*)::bigint AS ready_jobs,
+    coalesce(extract(epoch FROM now() - min(
+        CASE WHEN state = 'QUEUED' THEN available_at ELSE lease_expires_at END
+    )), 0)::double precision AS oldest_wait_seconds
+FROM song_jobs
+WHERE attempt_count < sqlc.arg(max_attempts)::integer
+  AND ((state = 'QUEUED' AND available_at <= now())
+    OR (state = 'RUNNING' AND lease_expires_at <= now()));

@@ -95,6 +95,9 @@ func TestRunnerCompletesSongAndRemovesInput(t *testing.T) {
 	if err != nil || !processed {
 		t.Fatalf("process one = %t, %v; want true, nil", processed, err)
 	}
+	if got := testutil.ToFloat64(workerIterationOperational); got != 1 {
+		t.Fatalf("worker iteration operational = %v, want 1", got)
+	}
 	if got := testutil.ToFloat64(workerAttempts.WithLabelValues("succeeded")); got != beforeSuccess+1 {
 		t.Fatalf("successful attempt count = %v, want %v", got, beforeSuccess+1)
 	}
@@ -181,6 +184,9 @@ func TestRunnerRetriesThenMarksSongFailed(t *testing.T) {
 			}
 		}
 	}
+	if got := testutil.ToFloat64(workerIterationOperational); got != 1 {
+		t.Fatalf("recorded failure left worker iteration operational = %v, want 1", got)
+	}
 	if got := testutil.ToFloat64(workerAttempts.WithLabelValues("failed")); got != beforeFailures+3 {
 		t.Fatalf("failed attempt count = %v, want %v", got, beforeFailures+3)
 	}
@@ -222,5 +228,42 @@ func TestRunnerTimesOutStalledProcessorAndRequeues(t *testing.T) {
 	}
 	if songStatus != "PROCESSING" || jobState != "QUEUED" || attempts != 1 {
 		t.Fatalf("timed out job = %s/%s attempt %d, want PROCESSING/QUEUED attempt 1", songStatus, jobState, attempts)
+	}
+}
+
+func TestQueueSampleReportsJobsAndDatabaseFailure(t *testing.T) {
+	pool := testPool(t)
+	insertQueuedJob(t, pool, "/tmp/queue-metrics-test.mp3")
+	runner := New(pool, nil, t.TempDir(), slog.New(slog.NewTextHandler(io.Discard, nil)), DefaultAttemptTimeout)
+	if err := runner.sampleQueue(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := testutil.ToFloat64(workerQueueSampleSuccess); got != 1 {
+		t.Fatalf("queue sample success = %v, want 1", got)
+	}
+	if got := testutil.ToFloat64(workerReadyJobs); got != 1 {
+		t.Fatalf("ready jobs = %v, want 1", got)
+	}
+	if got := testutil.ToFloat64(workerOldestReadyJobWait); got < 0 {
+		t.Fatalf("oldest wait = %v, want nonnegative", got)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := runner.sampleQueue(ctx); err == nil {
+		t.Fatal("canceled queue query unexpectedly succeeded")
+	}
+	if got := testutil.ToFloat64(workerQueueSampleSuccess); got != 0 {
+		t.Fatalf("queue sample success after query failure = %v, want 0", got)
+	}
+	if got := testutil.ToFloat64(workerReadyJobs); got != 0 {
+		t.Fatalf("ready jobs after query failure = %v, want 0", got)
+	}
+	processed, err := runner.ProcessOne(ctx)
+	if processed || err == nil {
+		t.Fatalf("canceled worker iteration = %t, %v; want unprocessed error", processed, err)
+	}
+	if got := testutil.ToFloat64(workerIterationOperational); got != 0 {
+		t.Fatalf("worker iteration operational after query failure = %v, want 0", got)
 	}
 }

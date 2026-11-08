@@ -194,6 +194,29 @@ func (q *Queries) FailSongJob(ctx context.Context, arg FailSongJobParams) (strin
 	return id, err
 }
 
+const getReadyQueueStats = `-- name: GetReadyQueueStats :one
+SELECT count(*)::bigint AS ready_jobs,
+    coalesce(extract(epoch FROM now() - min(
+        CASE WHEN state = 'QUEUED' THEN available_at ELSE lease_expires_at END
+    )), 0)::double precision AS oldest_wait_seconds
+FROM song_jobs
+WHERE attempt_count < $1::integer
+  AND ((state = 'QUEUED' AND available_at <= now())
+    OR (state = 'RUNNING' AND lease_expires_at <= now()))
+`
+
+type GetReadyQueueStatsRow struct {
+	ReadyJobs         int64
+	OldestWaitSeconds float64
+}
+
+func (q *Queries) GetReadyQueueStats(ctx context.Context, maxAttempts int32) (GetReadyQueueStatsRow, error) {
+	row := q.db.QueryRow(ctx, getReadyQueueStats, maxAttempts)
+	var i GetReadyQueueStatsRow
+	err := row.Scan(&i.ReadyJobs, &i.OldestWaitSeconds)
+	return i, err
+}
+
 const listSongJobMedia = `-- name: ListSongJobMedia :many
 SELECT song_id::text AS song_id, input_path, state, attempt_count, lease_expires_at
 FROM song_jobs
