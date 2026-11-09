@@ -71,3 +71,64 @@ export TEST_WORKER_DATABASE_URL='postgres://aux:aux_dev@127.0.0.1:5433/aux_battl
 go test ./...
 ```
 
+## Battle lobbies
+
+Battle routes require a valid session cookie. Create an account at `POST /users`
+and log in at `POST /users/login` to obtain one. Use separate cookie jars for
+host and guest accounts. With those jars saved as `host.cookies` and
+`guest.cookies`, create and join a lobby:
+
+```sh
+curl -b host.cookies -H 'Content-Type: application/json' \
+  -d '{"rounds":7}' http://localhost:8080/battles
+curl -b host.cookies http://localhost:8080/battles/BATTLE_ID
+curl -b guest.cookies -H 'Content-Type: application/json' \
+  -d '{"inviteCode":"ABC123"}' http://localhost:8080/battles/join
+```
+
+Replace `ABC123` with the invite code from the host's battle view, and
+`BATTLE_ID` with the ID returned when creating the battle. Omitting `rounds`
+from the JSON object defaults to five; the allowed range is one to seven.
+Joining creates all rounds and changes the lobby from `PENDING` to `SELECTING`
+in one transaction. Only one guest can join; self-joins and subsequent joins
+return `409`. An unknown invite code returns `404`. Battle reads return `404`
+for both missing battles and nonparticipants, and use `Cache-Control: no-store`.
+The view follows the reference client's field names and excludes song answers.
+Before reusing the reference frontend, reduce its round selector maximum from
+ten to seven to match this backend.
+
+Each player locks an ordered lineup using
+`PUT /battles/{battleId}/lineup`. For a two-round battle, the body is:
+
+```json
+{"songIds":["FIRST_SONG_UUID","SECOND_SONG_UUID"]}
+```
+
+Replace the placeholders with IDs from the curated catalog. Only upload and
+catalog tracks whose permissions cover storage, processing, and game playback.
+`READY` indicates successful processing, not verification of those permissions.
+
+Choose exactly one distinct song per round. Songs must be `READY` and all five
+audio files must be readable. The order of IDs determines the round order.
+Both players may choose from the same catalog, but neither can repeat a song
+within their own lineup. Once submitted, a lineup cannot be changed.
+
+The first successful submission returns `WAITING_ON_OPPONENT`. Once both lineups
+are locked, the response is `BATTLE_STARTED`, the battle becomes `ONGOING`, and
+round one becomes `GUESSING`. These state changes are committed together.
+Subsequent submissions return `409`; nonparticipants receive `404`. Battle views
+show each player's lineup readiness without exposing selected song IDs.
+Guess submission, round audio, and live updates remain subsequent steps.
+
+Migration `00003_battle_round_limit.sql` enforces the seven-round limit for
+existing databases. It fails without converting or deleting data if an existing
+battle exceeds seven rounds. Inspect such battles before migrating:
+
+```sql
+SELECT id, status, round_count FROM battles WHERE round_count > 7;
+```
+
+Resolve those records deliberately before rerunning migrations. The migration's
+rollback removes the new constraint and restores the previous maximum of ten.
+The PostgreSQL battle tests use `TEST_DATABASE_URL`; the full integration suite
+still requires the separate worker database described above.
