@@ -22,7 +22,12 @@ const (
 	maxSongFileBytes = 30 << 20
 	maxSongBodyBytes = 31 << 20
 	minClipSeconds   = 12
+
+	maxSongFieldBytes = 4 << 10
+	maxSongParts      = 100
 )
+
+var songFields = map[string]bool{"title": true, "artist": true, "genre": true, "clipStartSeconds": true}
 
 var errInvalidMP3 = errors.New("upload a valid MP3 file")
 
@@ -32,83 +37,72 @@ func receiveSongUpload(w http.ResponseWriter, r *http.Request) (validatedSongUpl
 	if err != nil || mediaType != "multipart/form-data" {
 		return empty, http.StatusUnsupportedMediaType, errors.New("expected multipart/form-data")
 	}
-
 	r.Body = http.MaxBytesReader(w, r.Body, maxSongBodyBytes)
-	parseErr := r.ParseMultipartForm(1 << 20)
-	if r.MultipartForm != nil {
-		defer r.MultipartForm.RemoveAll()
-	}
-	if parseErr != nil {
-		var sizeErr *http.MaxBytesError
-		if errors.As(parseErr, &sizeErr) {
-			return empty, http.StatusRequestEntityTooLarge, errors.New("request body too large")
-		}
+	parts, err := r.MultipartReader()
+	if err != nil {
 		return empty, http.StatusBadRequest, errors.New("invalid multipart body")
 	}
 
-	files := r.MultipartForm.File["song"]
-	if len(files) != 1 || len(r.MultipartForm.File) != 1 {
+	store := media.FromEnv()
+	var path string
+	keepFile := false
+	defer func() {
+		if path != "" && !keepFile {
+			_ = store.RemoveInput(path)
+		}
+	}()
+	fields := make(map[string]string, len(songFields))
+	for count := 1; ; count++ {
+		part, err := parts.NextPart()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			status, err := uploadReadError(err)
+			return empty, status, err
+		}
+		if count > maxSongParts {
+			return empty, http.StatusBadRequest, errors.New("too many multipart parts")
+		}
+		name := part.FormName()
+		switch {
+		case name == "":
+		case part.FileName() != "":
+			if name != "song" || path != "" {
+				return empty, http.StatusBadRequest, errors.New("one song file is required")
+			}
+			var status int
+			path, status, err = saveSongPart(store, part)
+			if err != nil {
+				return empty, status, err
+			}
+		case songFields[name]:
+			if _, ok := fields[name]; ok {
+				return empty, http.StatusBadRequest, errors.New("invalid song fields")
+			}
+			value, err := io.ReadAll(io.LimitReader(part, maxSongFieldBytes+1))
+			if err != nil {
+				status, err := uploadReadError(err)
+				return empty, status, err
+			}
+			if len(value) > maxSongFieldBytes {
+				return empty, http.StatusBadRequest, errors.New("invalid song fields")
+			}
+			fields[name] = strings.TrimSpace(string(value))
+		}
+	}
+	if path == "" {
 		return empty, http.StatusBadRequest, errors.New("one song file is required")
 	}
-	if files[0].Size == 0 {
-		return empty, http.StatusBadRequest, errors.New("song file is empty")
-	}
-	if files[0].Size > maxSongFileBytes {
-		return empty, http.StatusRequestEntityTooLarge, errors.New("song file is too large")
-	}
 
-	field := func(name string) (string, bool) {
-		values := r.MultipartForm.Value[name]
-		if len(values) != 1 {
-			return "", false
-		}
-		return strings.TrimSpace(values[0]), true
-	}
-	title, titleOK := field("title")
-	artist, artistOK := field("artist")
-	genre, genreOK := field("genre")
-	clipText, clipOK := field("clipStartSeconds")
-	if !titleOK || !artistOK || !genreOK || !clipOK || !validSongField(title, 255) || !validSongField(artist, 255) || !validSongField(genre, 50) {
+	title, artist, genre := fields["title"], fields["artist"], fields["genre"]
+	clipText, clipOK := fields["clipStartSeconds"]
+	if !clipOK || !validSongField(title, 255) || !validSongField(artist, 255) || !validSongField(genre, 50) {
 		return empty, http.StatusBadRequest, errors.New("invalid song fields")
 	}
 	clipStart, err := strconv.ParseFloat(clipText, 64)
 	if err != nil || math.IsNaN(clipStart) || math.IsInf(clipStart, 0) || clipStart < 0 {
 		return empty, http.StatusBadRequest, errors.New("invalid clip start")
-	}
-
-	source, err := files[0].Open()
-	if err != nil {
-		return empty, http.StatusInternalServerError, fmt.Errorf("open uploaded file: %w", err)
-	}
-	defer source.Close()
-	store := media.FromEnv()
-	target, err := store.CreateInput()
-	if err != nil {
-		return empty, http.StatusInternalServerError, err
-	}
-	path := target.Name()
-	keepFile := false
-	defer func() {
-		if !keepFile {
-			_ = store.RemoveInput(path)
-		}
-	}()
-
-	written, copyErr := io.Copy(target, io.LimitReader(source, maxSongFileBytes+1))
-	if copyErr != nil {
-		_ = target.Close()
-		return empty, http.StatusInternalServerError, fmt.Errorf("copy uploaded file: %w", copyErr)
-	}
-	if written > maxSongFileBytes {
-		_ = target.Close()
-		return empty, http.StatusRequestEntityTooLarge, errors.New("song file is too large")
-	}
-	if err := target.Sync(); err != nil {
-		_ = target.Close()
-		return empty, http.StatusInternalServerError, fmt.Errorf("sync uploaded file: %w", err)
-	}
-	if err := target.Close(); err != nil {
-		return empty, http.StatusInternalServerError, fmt.Errorf("close uploaded file: %w", err)
 	}
 
 	duration, err := probeMP3Duration(r.Context(), path)
@@ -131,6 +125,55 @@ func receiveSongUpload(w http.ResponseWriter, r *http.Request) (validatedSongUpl
 		DurationSeconds:  int32(math.Max(1, math.Round(duration))),
 		ClipStartSeconds: clipStart,
 	}, 0, nil
+}
+
+func saveSongPart(store media.Store, part io.Reader) (string, int, error) {
+	target, err := store.CreateInput()
+	if err != nil {
+		return "", http.StatusInternalServerError, err
+	}
+	path := target.Name()
+	source := &readErrorRecorder{r: io.LimitReader(part, maxSongFileBytes+1)}
+	written, err := io.Copy(target, source)
+	if err == nil {
+		err = target.Sync()
+	}
+	if closeErr := target.Close(); err == nil {
+		err = closeErr
+	}
+	switch {
+	case source.err != nil:
+		status, readErr := uploadReadError(source.err)
+		return path, status, readErr
+	case err != nil:
+		return path, http.StatusInternalServerError, fmt.Errorf("save uploaded file: %w", err)
+	case written == 0:
+		return path, http.StatusBadRequest, errors.New("song file is empty")
+	case written > maxSongFileBytes:
+		return path, http.StatusRequestEntityTooLarge, errors.New("song file is too large")
+	}
+	return path, 0, nil
+}
+
+type readErrorRecorder struct {
+	r   io.Reader
+	err error
+}
+
+func (r *readErrorRecorder) Read(p []byte) (int, error) {
+	n, err := r.r.Read(p)
+	if err != nil && !errors.Is(err, io.EOF) {
+		r.err = err
+	}
+	return n, err
+}
+
+func uploadReadError(err error) (int, error) {
+	var sizeErr *http.MaxBytesError
+	if errors.As(err, &sizeErr) {
+		return http.StatusRequestEntityTooLarge, errors.New("request body too large")
+	}
+	return http.StatusBadRequest, errors.New("invalid multipart body")
 }
 
 func validSongField(value string, maxRunes int) bool {

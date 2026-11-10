@@ -3,8 +3,8 @@ package server
 import (
 	"encoding/json"
 	"errors"
-	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -19,7 +19,7 @@ type songResponse struct {
 func (s *server) listSongs(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.queries.ListSongs(r.Context())
 	if err != nil {
-		s.loggerFor(r.Context()).Error("list songs failed", slog.String("error", err.Error()))
+		s.loggerFor(r.Context()).Error("list songs failed", "error", err)
 		writeJSONError(w, http.StatusInternalServerError, "database error")
 		return
 	}
@@ -33,7 +33,7 @@ func (s *server) listSongs(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(songs); err != nil {
-		s.loggerFor(r.Context()).Error("write songs response failed", slog.String("error", err.Error()))
+		s.loggerFor(r.Context()).Error("write songs response failed", "error", err)
 	}
 }
 
@@ -49,7 +49,7 @@ func (s *server) getSong(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		s.loggerFor(r.Context()).Error("get songs failed", slog.String("error", err.Error()))
+		s.loggerFor(r.Context()).Error("get songs failed", "error", err)
 		writeJSONError(w, http.StatusInternalServerError, "database error")
 		return
 	}
@@ -81,7 +81,7 @@ func (s *server) getSongStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		s.loggerFor(r.Context()).Error("get song status failed", slog.String("error", err.Error()))
+		s.loggerFor(r.Context()).Error("get song status failed", "error", err)
 		writeJSONError(w, http.StatusInternalServerError, "database error")
 		return
 	}
@@ -110,7 +110,26 @@ type validatedSongUpload struct {
 	ClipStartSeconds     float64
 }
 
+const transferDeadline = 5 * time.Minute
+
+func extendDeadlines(w http.ResponseWriter, d time.Duration) error {
+	deadline := time.Now().Add(d)
+	controller := http.NewResponseController(w)
+	if err := controller.SetReadDeadline(deadline); err != nil && !errors.Is(err, http.ErrNotSupported) {
+		return err
+	}
+	if err := controller.SetWriteDeadline(deadline); err != nil && !errors.Is(err, http.ErrNotSupported) {
+		return err
+	}
+	return nil
+}
+
 func (s *server) uploadSong(w http.ResponseWriter, r *http.Request) {
+	if err := extendDeadlines(w, transferDeadline); err != nil {
+		s.loggerFor(r.Context()).Error("extend upload deadlines", "error", err)
+		writeJSONError(w, http.StatusInternalServerError, "could not upload song")
+		return
+	}
 	in, errorStatus, err := receiveSongUpload(w, r)
 	if err != nil {
 		if errorStatus == http.StatusInternalServerError {

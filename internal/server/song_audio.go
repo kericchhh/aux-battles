@@ -3,6 +3,7 @@ package server
 import (
 	"errors"
 	"net/http"
+	"os"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -57,8 +58,16 @@ func (s *server) getSongAudio(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
+	s.serveAudio(w, r, part+".mp3", "private", file, info)
+}
 
+func (s *server) serveAudio(w http.ResponseWriter, r *http.Request, name, cacheControl string, file *os.File, info os.FileInfo) {
+	if err := extendDeadlines(w, transferDeadline); err != nil {
+		s.loggerFor(r.Context()).Error("extend audio deadlines", "error", err)
+		writeJSONError(w, http.StatusInternalServerError, "audio unavailable")
+		return
+	}
 	w.Header().Set("Content-Type", "audio/mpeg")
-	w.Header().Set("Cache-Control", "private")
-	http.ServeContent(w, r, part+".mp3", info.ModTime(), file)
+	w.Header().Set("Cache-Control", cacheControl)
+	http.ServeContent(w, r, name, info.ModTime(), file)
 }

@@ -1,11 +1,13 @@
 package server
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json/v2"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/mail"
 	"regexp"
@@ -251,4 +253,25 @@ func newSessionToken() (token, tokenHash string, err error) {
 	token = hex.EncodeToString(random[:])
 	sum := sha256.Sum256([]byte(token))
 	return token, hex.EncodeToString(sum[:]), nil
+}
+
+func PruneSessions(ctx context.Context, queries *dbgen.Queries, logger *slog.Logger, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		deleted, err := queries.DeleteExpiredSessions(ctx)
+		switch {
+		case ctx.Err() != nil:
+			return
+		case err != nil:
+			logger.Error("delete expired sessions", "error", err)
+		case deleted > 0:
+			logger.Info("deleted expired sessions", "count", deleted)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
 }

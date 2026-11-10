@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"net/http"
 )
 
@@ -18,7 +17,7 @@ func (s *server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		if err != nil {
-			s.loggerFor(r.Context()).Error("authenticate request failed", slog.String("error", err.Error()))
+			s.loggerFor(r.Context()).Error("authenticate request failed", "error", err)
 			writeJSONError(w, http.StatusInternalServerError, "could not authenticate request")
 			return
 		}

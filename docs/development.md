@@ -69,7 +69,15 @@ If `goose` is not found after installation, add `$(go env GOPATH)/bin` to your
 `PATH`.
 
 When serving over HTTPS, set `APP_ENV=production` to issue Secure session
-cookies with the `__Host-` prefix.
+cookies with the `__Host-` prefix. Sessions last seven days; the API deletes
+expired sessions at startup and hourly afterwards.
+
+On `SIGTERM` or `Ctrl-C`, the API stops accepting connections and gives
+in-flight requests up to eight seconds to finish, then closes any remaining
+connections, interrupting slow uploads or downloads. A second signal exits
+immediately. Requests must arrive within 30 seconds and responses within
+60 seconds, except song uploads and audio downloads, which may take up to five
+minutes.
 
 ## Tests
 

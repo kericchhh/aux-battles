@@ -13,6 +13,6 @@ WHERE s.token_hash = $1
 DELETE FROM sessions
 WHERE token_hash = $1;
 
--- name: DeleteExpiredSessions :exec
+-- name: DeleteExpiredSessions :execrows
 DELETE FROM sessions
 WHERE expires_at <= now();

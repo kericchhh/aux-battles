@@ -51,7 +51,5 @@ func (s *server) getRoundAudio(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
-	w.Header().Set("Content-Type", "audio/mpeg")
-	w.Header().Set("Cache-Control", "private, no-store")
-	http.ServeContent(w, r, "round.mp3", info.ModTime(), file)
+	s.serveAudio(w, r, "round.mp3", "private, no-store", file, info)
 }
