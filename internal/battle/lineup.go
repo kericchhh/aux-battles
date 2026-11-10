@@ -86,6 +86,9 @@ func (l *Lobby) SubmitLineup(ctx context.Context, userID, battleID pgtype.UUID, 
 		return LineupResult{}, ErrSongNotFound
 	}
 	for _, song := range songs {
+		if normalizeTitle(song.Title) == "" {
+			return LineupResult{}, invalidInput("a selected song has an unmatchable title")
+		}
 		if song.Status != "READY" {
 			return LineupResult{}, ErrSongNotReady
 		}
