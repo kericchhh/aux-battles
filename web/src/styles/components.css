@@ -1,0 +1,192 @@
+@utility shell {
+  @apply mx-auto w-full max-w-6xl px-4 sm:px-6;
+}
+
+@layer components {
+  .topbar {
+    @apply sticky top-0 z-40 bg-ink/85 backdrop-blur-md;
+  }
+  .brand {
+    @apply rounded-md font-semibold tracking-tight;
+  }
+  .avatar {
+    @apply grid size-9 place-items-center rounded-full bg-raised text-sm font-medium uppercase;
+  }
+  .skip-link {
+    @apply fixed top-2 left-2 z-50 -translate-y-20 rounded-md bg-accent px-4 py-3 text-white transition-transform focus:translate-y-0;
+  }
+  .link {
+    @apply text-accent-text;
+    background: linear-gradient(currentColor, currentColor) left bottom / 0 1px no-repeat;
+    transition: background-size 250ms var(--ease-out);
+
+    &:hover,
+    &:focus-visible {
+      background-size: 100% 1px;
+    }
+  }
+  .page-header {
+    @apply grid gap-1;
+
+    & p {
+      @apply text-dim;
+    }
+  }
+  .card {
+    @apply grid content-start gap-6 rounded-lg bg-card p-6 shadow-card sm:p-7;
+  }
+  .card-pop {
+    @apply grid gap-6 rounded-lg bg-card p-6 shadow-pop sm:p-8;
+  }
+  .tabs-list {
+    --gap: 4px;
+    @apply relative isolate grid gap-(--gap) rounded-md bg-well p-1;
+    grid-template-columns: repeat(var(--count), minmax(0, 1fr));
+  }
+  .tabs-thumb {
+    @apply absolute top-1 bottom-1 left-1 -z-10 rounded-sm bg-raised shadow-card;
+    width: calc((100% - 0.5rem - (var(--count) - 1) * var(--gap)) / var(--count));
+    translate: calc(var(--selected) * (100% + var(--gap))) 0;
+    transition: translate 300ms var(--ease-out);
+  }
+  .tabs-trigger {
+    @apply h-9 rounded-sm font-medium text-dim transition-colors hover:text-paper data-[state=active]:text-paper;
+  }
+  .tab-panel {
+    @apply mt-5 data-[state=active]:animate-rise;
+  }
+  .steps {
+    @apply grid max-w-prose list-decimal gap-2 pl-5 text-dim marker:font-mono marker:text-paper;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-md px-5 text-base font-medium whitespace-nowrap select-none;
+    @apply bg-accent text-white hover:bg-accent-hover;
+    transition:
+      background-color 150ms,
+      color 150ms,
+      scale 100ms var(--ease-out);
+
+    &:active {
+      scale: 0.97;
+    }
+    &:disabled {
+      @apply pointer-events-none opacity-50;
+    }
+    & svg {
+      @apply size-4 shrink-0;
+      transition: translate 200ms var(--ease-out);
+    }
+    &[data-nudge]:hover svg {
+      translate: 2px 0;
+    }
+
+    &[data-variant='secondary'] {
+      @apply bg-raised text-paper hover:bg-hover;
+    }
+    &[data-variant='ghost'] {
+      @apply bg-transparent text-dim hover:bg-raised hover:text-paper;
+    }
+    &[data-variant='destructive'] {
+      @apply bg-alarm/15 text-alarm hover:bg-alarm/25;
+    }
+    &[data-size='icon'] {
+      @apply size-11 px-0;
+    }
+  }
+
+  .input {
+    @apply h-11 w-full min-w-0 rounded-md border border-edge/60 bg-well px-3 outline-none;
+    @apply transition-colors placeholder:text-dim hover:border-edge focus-visible:border-ring;
+
+    &:disabled {
+      @apply opacity-50;
+    }
+    &[aria-invalid='true'] {
+      @apply border-alarm;
+    }
+  }
+
+  .label {
+    @apply text-sm font-medium;
+  }
+
+  .segmented {
+    --gap: 4px;
+    @apply relative isolate grid grid-cols-7 gap-(--gap) rounded-md bg-well p-1;
+
+    & label {
+      @apply relative;
+    }
+    & span:not(.segmented-thumb) {
+      @apply grid h-10 cursor-pointer place-items-center rounded-sm font-mono text-base text-dim tabular transition-colors duration-200 hover:text-paper;
+    }
+    & input:not(:checked) + span:hover {
+      @apply bg-raised;
+    }
+    & input:checked + span {
+      @apply text-white;
+    }
+    & input:focus-visible + span {
+      @apply outline-2 outline-offset-2 outline-ring;
+    }
+  }
+  .segmented-thumb {
+    @apply absolute top-1 bottom-1 left-1 -z-10 rounded-sm bg-accent;
+    width: calc((100% - 0.5rem - 6 * var(--gap)) / 7);
+    translate: calc(var(--selected) * (100% + var(--gap))) 0;
+    transition: translate 300ms var(--ease-out);
+  }
+
+  .dialog-overlay {
+    @apply fixed inset-0 z-50 bg-black/70;
+    @apply data-[state=closed]:animate-out data-[state=closed]:fade-out-0;
+    @apply data-[state=open]:animate-in data-[state=open]:fade-in-0;
+  }
+  .dialog {
+    @apply fixed top-1/2 left-1/2 z-50 grid w-[calc(100%-2rem)] max-w-md -translate-1/2 gap-5;
+    @apply rounded-lg bg-card p-6 shadow-pop;
+    @apply data-[state=closed]:animate-out data-[state=closed]:fade-out-0;
+    @apply data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95;
+  }
+  .toast {
+    @apply flex w-full items-center gap-3 rounded-lg bg-raised p-4 shadow-pop;
+
+    &[data-type='error'] {
+      @apply text-alarm;
+    }
+  }
+}
+
+@layer components {
+  .stem-meter {
+    @apply grid grid-cols-4 gap-1 rounded-lg bg-card p-1 shadow-card;
+  }
+  .stem-meter-inset {
+    @apply bg-well shadow-none;
+  }
+  .stem-cell {
+    @apply grid gap-1 rounded-md px-4 py-3 text-dim transition-colors duration-300;
+
+    &[data-state='past'] {
+      @apply bg-raised text-paper;
+    }
+    &[data-state='now'] {
+      @apply bg-accent text-white;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn:active,
+  .btn[data-nudge]:hover svg {
+    scale: none;
+    translate: none;
+  }
+  .segmented-thumb,
+  .tabs-thumb {
+    transition: none;
+  }
+}

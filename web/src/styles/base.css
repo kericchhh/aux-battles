@@ -1,0 +1,33 @@
+@layer base {
+  :root {
+    color-scheme: dark;
+    scrollbar-color: var(--color-raised) var(--color-ink);
+  }
+  html {
+    @apply bg-ink font-sans text-base text-paper antialiased;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply font-semibold tracking-tight text-balance;
+  }
+  :focus-visible {
+    @apply rounded-sm outline-2 outline-offset-2 outline-ring;
+  }
+  ::selection {
+    @apply bg-accent text-white;
+  }
+  input {
+    caret-color: var(--color-ring);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}
