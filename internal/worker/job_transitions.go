@@ -94,22 +94,22 @@ func (j jobTransitions) renew(ctx context.Context, id pgtype.UUID, attempt int32
 	return err
 }
 
-func (j jobTransitions) fail(ctx context.Context, id pgtype.UUID, attempt int32, cause error) (bool, error) {
+func (j jobTransitions) fail(ctx context.Context, id pgtype.UUID, attempt int32, cause error) (Outcome, error) {
 	if attempt < maxAttempts {
 		_, err := j.queries.RetrySongJob(ctx, dbgen.RetrySongJobParams{
 			SongID: id, AttemptCount: attempt, DelaySeconds: 15 * attempt,
 		})
 		if err != nil {
-			return false, fmt.Errorf("retry song job after %v: %w", cause, err)
+			return AttemptUnrecorded, fmt.Errorf("retry song job after %v: %w", cause, err)
 		}
-		return false, nil
+		return RetryScheduled, nil
 	}
 	_, err := j.queries.FailSongJob(ctx, dbgen.FailSongJobParams{
 		SongID: id, AttemptCount: attempt,
 		ProcessingError: fmt.Sprintf("Song processing failed after %d attempts.", maxAttempts),
 	})
 	if err != nil {
-		return false, fmt.Errorf("fail song job after %v: %w", cause, err)
+		return AttemptUnrecorded, fmt.Errorf("fail song job after %v: %w", cause, err)
 	}
-	return true, nil
+	return PermanentlyFailed, nil
 }

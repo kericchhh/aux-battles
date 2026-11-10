@@ -4,10 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os/exec"
-	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/kericchhh/aux-battles/internal/media"
@@ -69,20 +66,4 @@ func logAudioStage(logger *slog.Logger, stage string, start time.Time, err error
 	}
 	logger.Info("song audio stage finished", "stage", stage, "outcome", outcome,
 		"duration_ms", float64(time.Since(start))/float64(time.Millisecond))
-}
-
-func runCommand(ctx context.Context, name string, args ...string) error {
-	command := exec.CommandContext(ctx, name, args...)
-	output, err := command.CombinedOutput()
-	if err == nil {
-		return nil
-	}
-	detail := strings.TrimSpace(string(output))
-	if len(detail) > 2000 {
-		detail = detail[len(detail)-2000:]
-	}
-	if detail == "" {
-		return fmt.Errorf("%s: %w", filepath.Base(name), err)
-	}
-	return fmt.Errorf("%s: %w: %s", filepath.Base(name), err, detail)
 }

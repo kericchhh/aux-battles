@@ -22,6 +22,7 @@ const (
 	queueSampleInterval   = 15 * time.Second
 	queueSampleTimeout    = 5 * time.Second
 	renewInterval         = time.Minute
+	renewQueryTimeout     = 5 * time.Second
 	DefaultAttemptTimeout = 30 * time.Minute
 )
 
@@ -64,12 +65,17 @@ type Job struct {
 	AttemptCount     int32
 }
 
-type recordedJobFailure struct {
-	cause error
-}
+// Outcome describes how a worker iteration ended.
+type Outcome string
 
-func (e *recordedJobFailure) Error() string { return e.cause.Error() }
-func (e *recordedJobFailure) Unwrap() error { return e.cause }
+const (
+	Idle              Outcome = "idle"
+	Completed         Outcome = "completed"
+	RetryScheduled    Outcome = "retry_scheduled"
+	PermanentlyFailed Outcome = "permanently_failed"
+	PollFailed        Outcome = "poll_failed"
+	AttemptUnrecorded Outcome = "attempt_unrecorded"
+)
 
 type AudioFiles = media.Published
 
@@ -83,6 +89,7 @@ type Runner struct {
 	media          media.Store
 	logger         *slog.Logger
 	attemptTimeout time.Duration
+	renewInterval  time.Duration
 }
 
 func New(pool *pgxpool.Pool, processor Processor, mediaRoot string, logger *slog.Logger, attemptTimeout time.Duration) *Runner {
@@ -90,7 +97,14 @@ func New(pool *pgxpool.Pool, processor Processor, mediaRoot string, logger *slog
 		attemptTimeout = DefaultAttemptTimeout
 	}
 	queries := dbgen.New(pool)
-	return &Runner{jobs: jobTransitions{queries: queries}, processor: processor, media: media.New(mediaRoot), logger: logger, attemptTimeout: attemptTimeout}
+	return &Runner{
+		jobs:           jobTransitions{queries: queries},
+		processor:      processor,
+		media:          media.New(mediaRoot),
+		logger:         logger,
+		attemptTimeout: attemptTimeout,
+		renewInterval:  renewInterval,
+	}
 }
 
 func (r *Runner) Run(ctx context.Context) error {
@@ -106,19 +120,19 @@ func (r *Runner) Run(ctx context.Context) error {
 			}
 			nextCleanup = time.Now().Add(media.CleanupInterval)
 		}
-		processed, err := r.ProcessOne(ctx)
+		outcome, err := r.ProcessOne(ctx)
 		if ctx.Err() != nil {
 			return nil
 		}
 		wait := pollInterval
-		if err != nil && !processed {
+		if outcome == PollFailed {
 			wait = backoff
 			r.logger.Error("song worker iteration failed", "error", err, "retry_in", wait.String())
 			backoff = min(backoff*2, maxPollBackoff)
 		} else {
 			backoff = pollInterval
 		}
-		if processed && err == nil {
+		if outcome == Completed {
 			continue
 		}
 		select {
@@ -176,11 +190,11 @@ func (r *Runner) sampleQueue(ctx context.Context) error {
 	return nil
 }
 
-func (r *Runner) ProcessOne(ctx context.Context) (bool, error) {
+func (r *Runner) ProcessOne(ctx context.Context) (Outcome, error) {
 	expired, err := r.jobs.failExpired(ctx)
 	if err != nil {
 		workerIterationOperational.Set(0)
-		return false, fmt.Errorf("fail expired jobs: %w", err)
+		return PollFailed, fmt.Errorf("fail expired jobs: %w", err)
 	}
 	for _, job := range expired {
 		logger := r.logger.With("song_id", job.SongID)
@@ -190,62 +204,67 @@ func (r *Runner) ProcessOne(ctx context.Context) (bool, error) {
 	job, err := r.jobs.claim(ctx)
 	if errors.Is(err, pgx.ErrNoRows) {
 		workerIterationOperational.Set(1)
-		return false, nil
+		return Idle, nil
 	}
 	if err != nil {
 		workerIterationOperational.Set(0)
-		return false, fmt.Errorf("claim song job: %w", err)
+		return PollFailed, fmt.Errorf("claim song job: %w", err)
 	}
 	workerIterationOperational.Set(1)
 	logger := r.jobLogger(job)
 	logger.Info("processing song")
 	start := time.Now()
-	err = r.process(ctx, job)
-	outcome := "succeeded"
+	result, err := r.processAttempt(ctx, job)
+	outcome := "failed"
+	if result == Completed {
+		outcome = "succeeded"
+	}
 	if err != nil {
-		outcome = "failed"
-		var recorded *recordedJobFailure
-		if !errors.As(err, &recorded) {
-			workerIterationOperational.Set(0)
-			logger.Error("song attempt failed", "error", err)
-		}
+		workerIterationOperational.Set(0)
+		logger.Error("song attempt failed", "error", err)
 	}
 	duration := time.Since(start)
 	workerAttempts.WithLabelValues(outcome).Inc()
 	workerAttemptDuration.Observe(duration.Seconds())
 	logger.Info("song attempt finished", "outcome", outcome,
 		"duration_ms", float64(duration)/float64(time.Millisecond))
-	return true, err
+	return result, err
 }
 
 func (r *Runner) jobLogger(job Job) *slog.Logger {
 	return r.logger.With("song_id", job.SongID, "attempt", job.AttemptCount)
 }
 
-func (r *Runner) process(ctx context.Context, job Job) error {
+func (r *Runner) processAttempt(ctx context.Context, job Job) (Outcome, error) {
 	logger := r.jobLogger(job)
 	var songID pgtype.UUID
 	if err := songID.Scan(job.SongID); err != nil {
-		return fmt.Errorf("parse claimed song ID: %w", err)
+		return AttemptUnrecorded, fmt.Errorf("parse claimed song ID: %w", err)
 	}
 	workCtx, cancel := context.WithTimeout(ctx, r.attemptTimeout)
 	defer cancel()
-	renewResult := make(chan error, 1)
-	done := make(chan struct{})
-	go r.renewLease(workCtx, cancel, songID, job.AttemptCount, renewResult, done)
+	leaseResult := make(chan error, 1)
+	go func() {
+		ticker := time.NewTicker(r.renewInterval)
+		defer ticker.Stop()
+		err := maintainLease(workCtx, ticker.C, func(renewCtx context.Context) error {
+			return r.jobs.renew(renewCtx, songID, job.AttemptCount)
+		})
+		leaseResult <- err
+		if err != nil {
+			cancel()
+		}
+	}()
 	files, processErr := r.processor.Process(workCtx, job)
 	workErr := workCtx.Err()
 	cancel()
-	<-done
-	select {
-	case err := <-renewResult:
+	if err := <-leaseResult; err != nil {
 		r.discard(logger, files.Directory)
-		return fmt.Errorf("renew song lease: %w", err)
-	default:
+		return AttemptUnrecorded, fmt.Errorf("renew song lease: %w", err)
 	}
 	if err := ctx.Err(); err != nil {
 		r.discard(logger, files.Directory)
-		return err
+		return AttemptUnrecorded, err
 	}
 	if errors.Is(workErr, context.DeadlineExceeded) {
 		r.discard(logger, files.Directory)
@@ -262,50 +281,47 @@ func (r *Runner) process(ctx context.Context, job Job) error {
 		if errors.Is(err, pgx.ErrNoRows) {
 			r.discard(logger, files.Directory)
 		}
-		return fmt.Errorf("complete song job: %w", err)
+		return AttemptUnrecorded, fmt.Errorf("complete song job: %w", err)
 	}
 	r.removeInputWithLogger(logger, job.InputPath)
 	logger.Info("song ready")
-	return nil
+	return Completed, nil
 }
 
-func (r *Runner) renewLease(ctx context.Context, cancel context.CancelFunc, id pgtype.UUID, attempt int32, result chan<- error, done chan<- struct{}) {
-	defer close(done)
-	ticker := time.NewTicker(renewInterval)
-	defer ticker.Stop()
+func maintainLease(ctx context.Context, ticks <-chan time.Time, renew func(context.Context) error) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			err := r.jobs.renew(ctx, id, attempt)
+			return nil
+		case <-ticks:
+			renewCtx, cancel := context.WithTimeout(ctx, renewQueryTimeout)
+			err := renew(renewCtx)
+			cancel()
 			if err != nil {
 				if ctx.Err() != nil {
-					return
+					return nil
 				}
-				result <- err
-				cancel()
-				return
+				return err
 			}
 		}
 	}
 }
 
-func (r *Runner) recordFailure(parent context.Context, job Job, id pgtype.UUID, cause error) error {
+func (r *Runner) recordFailure(parent context.Context, job Job, id pgtype.UUID, cause error) (Outcome, error) {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), 5*time.Second)
 	defer cancel()
-	terminal, err := r.jobs.fail(ctx, id, job.AttemptCount, cause)
+	result, err := r.jobs.fail(ctx, id, job.AttemptCount, cause)
 	if err != nil {
-		return err
+		return AttemptUnrecorded, err
 	}
-	if !terminal {
+	if result == RetryScheduled {
 		r.jobLogger(job).Info("song processing will retry", "error", cause)
-		return &recordedJobFailure{cause: cause}
+		return result, nil
 	}
 	logger := r.jobLogger(job)
 	r.removeInputWithLogger(logger, job.InputPath)
 	logger.Error("song processing failed", "error", cause)
-	return &recordedJobFailure{cause: cause}
+	return result, nil
 }
 
 func (r *Runner) removeInput(path string) {

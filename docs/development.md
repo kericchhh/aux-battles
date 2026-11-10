@@ -31,6 +31,25 @@ The worker also listens on `:9091` for metrics. Set `WORKER_METRICS_ADDR` to a
 different address if that port is occupied; for example,
 `WORKER_METRICS_ADDR=127.0.0.1:9191 go run ./cmd/worker` keeps it on the host.
 
+The worker keeps only the last 2,000 bytes of FFmpeg and Demucs output for
+failure diagnostics. On Linux, macOS, and FreeBSD, cancellation terminates the
+command's process group, including descendants that remain in that group.
+Other platforms use Go's direct-process cancellation. Waiting on inherited
+output pipes is bounded by two seconds after cancellation or process exit.
+
+While processing, the worker renews the job lease every minute. Each renewal
+query has a five-second deadline. A renewal failure cancels processing, removes
+that attempt's output, and retains the input so the job can be recovered after
+lease expiry. If the outcome of the final database update is unknown, the
+worker retains both the input and published output to avoid deleting files
+that the database may already reference.
+
+Internally, worker iterations distinguish idle polling, completed processing,
+scheduled retries, permanent failures, polling errors, and unrecorded attempts.
+A successfully recorded retry or permanent failure is an outcome rather than
+an operational error; the processing cause remains in the logs. Attempt counters
+retain their `succeeded` and `failed` labels.
+
 Both processes use `./storage` by default. Set the same `MEDIA_ROOT` for both
 when using another directory. Uploads create queued jobs. The worker extracts
 the selected 12-second clip, creates four stems, and changes the song status to

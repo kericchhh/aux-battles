@@ -91,9 +91,9 @@ func TestRunnerCompletesSongAndRemovesInput(t *testing.T) {
 	})
 	var logOutput bytes.Buffer
 	runner := New(pool, processor, root, slog.New(slog.NewJSONHandler(&logOutput, nil)), 30*time.Minute)
-	processed, err := runner.ProcessOne(context.Background())
-	if err != nil || !processed {
-		t.Fatalf("process one = %t, %v; want true, nil", processed, err)
+	outcome, err := runner.ProcessOne(context.Background())
+	if err != nil || outcome != Completed {
+		t.Fatalf("process one = %s, %v; want completed, nil", outcome, err)
 	}
 	if got := testutil.ToFloat64(workerIterationOperational); got != 1 {
 		t.Fatalf("worker iteration operational = %v, want 1", got)
@@ -164,9 +164,13 @@ func TestRunnerRetriesThenMarksSongFailed(t *testing.T) {
 	})
 	runner := New(pool, processor, root, slog.New(slog.NewTextHandler(io.Discard, nil)), 30*time.Minute)
 	for attempt := 1; attempt <= 3; attempt++ {
-		processed, err := runner.ProcessOne(context.Background())
-		if !processed || err == nil {
-			t.Fatalf("attempt %d = %t, %v; want processed error", attempt, processed, err)
+		outcome, err := runner.ProcessOne(context.Background())
+		want := RetryScheduled
+		if attempt == 3 {
+			want = PermanentlyFailed
+		}
+		if outcome != want || err != nil {
+			t.Fatalf("attempt %d = %s, %v; want %s, nil", attempt, outcome, err, want)
 		}
 		if attempt < 3 {
 			var delaySeconds float64
@@ -215,9 +219,9 @@ func TestRunnerTimesOutStalledProcessorAndRequeues(t *testing.T) {
 		return AudioFiles{}, nil
 	})
 	runner := New(pool, processor, t.TempDir(), slog.New(slog.NewTextHandler(io.Discard, nil)), 30*time.Millisecond)
-	processed, err := runner.ProcessOne(context.Background())
-	if !processed || !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("timed out attempt = %t, %v; want processed deadline error", processed, err)
+	outcome, err := runner.ProcessOne(context.Background())
+	if outcome != RetryScheduled || err != nil {
+		t.Fatalf("timed out attempt = %s, %v; want retry scheduled, nil", outcome, err)
 	}
 	var songStatus, jobState string
 	var attempts int32
@@ -259,9 +263,9 @@ func TestQueueSampleReportsJobsAndDatabaseFailure(t *testing.T) {
 	if got := testutil.ToFloat64(workerReadyJobs); got != 0 {
 		t.Fatalf("ready jobs after query failure = %v, want 0", got)
 	}
-	processed, err := runner.ProcessOne(ctx)
-	if processed || err == nil {
-		t.Fatalf("canceled worker iteration = %t, %v; want unprocessed error", processed, err)
+	outcome, err := runner.ProcessOne(ctx)
+	if outcome != PollFailed || err == nil {
+		t.Fatalf("canceled worker iteration = %s, %v; want poll failure", outcome, err)
 	}
 	if got := testutil.ToFloat64(workerIterationOperational); got != 0 {
 		t.Fatalf("worker iteration operational after query failure = %v, want 0", got)
