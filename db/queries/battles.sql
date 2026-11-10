@@ -37,7 +37,7 @@ WHERE id = sqlc.arg(id)::uuid
 FOR UPDATE;
 
 -- name: GetLineupSongs :many
-SELECT id, status, full_song_path, drums_path, bass_path, melody_path, vocals_path
+SELECT id, title, status, full_song_path, drums_path, bass_path, melody_path, vocals_path
 FROM songs WHERE id = ANY(sqlc.arg(song_ids)::uuid[])
 ORDER BY id
 FOR SHARE;
@@ -58,3 +58,11 @@ WHERE battle_id = $1 AND round_number = 1 AND status = 'WAITING'
 -- name: StartBattle :execrows
 UPDATE battles SET status = 'ONGOING'
 WHERE id = $1 AND status = 'SELECTING' AND current_round = 1;
+
+-- name: AdvanceBattle :execrows
+UPDATE battles SET current_round = current_round + 1
+WHERE id = $1 AND status = 'ONGOING' AND current_round = $2 AND current_round < round_count;
+
+-- name: FinishBattle :execrows
+UPDATE battles SET status = 'FINISHED', winner_id = sqlc.narg(winner_id)::uuid
+WHERE id = sqlc.arg(id)::uuid AND status = 'ONGOING' AND current_round = round_count;

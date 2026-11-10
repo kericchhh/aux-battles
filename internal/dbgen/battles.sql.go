@@ -25,6 +25,24 @@ func (q *Queries) ActivateFirstRound(ctx context.Context, battleID pgtype.UUID) 
 	return result.RowsAffected(), nil
 }
 
+const advanceBattle = `-- name: AdvanceBattle :execrows
+UPDATE battles SET current_round = current_round + 1
+WHERE id = $1 AND status = 'ONGOING' AND current_round = $2 AND current_round < round_count
+`
+
+type AdvanceBattleParams struct {
+	ID           pgtype.UUID
+	CurrentRound int32
+}
+
+func (q *Queries) AdvanceBattle(ctx context.Context, arg AdvanceBattleParams) (int64, error) {
+	result, err := q.db.Exec(ctx, advanceBattle, arg.ID, arg.CurrentRound)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const createBattle = `-- name: CreateBattle :one
 INSERT INTO battles (host_id, invite_code, round_count)
 VALUES ($1, $2, $3)
@@ -58,6 +76,24 @@ type CreateBattleRoundsParams struct {
 
 func (q *Queries) CreateBattleRounds(ctx context.Context, arg CreateBattleRoundsParams) (int64, error) {
 	result, err := q.db.Exec(ctx, createBattleRounds, arg.BattleID, arg.RoundCount)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const finishBattle = `-- name: FinishBattle :execrows
+UPDATE battles SET status = 'FINISHED', winner_id = $1::uuid
+WHERE id = $2::uuid AND status = 'ONGOING' AND current_round = round_count
+`
+
+type FinishBattleParams struct {
+	WinnerID pgtype.UUID
+	ID       pgtype.UUID
+}
+
+func (q *Queries) FinishBattle(ctx context.Context, arg FinishBattleParams) (int64, error) {
+	result, err := q.db.Exec(ctx, finishBattle, arg.WinnerID, arg.ID)
 	if err != nil {
 		return 0, err
 	}
@@ -104,7 +140,7 @@ func (q *Queries) GetBattleForParticipant(ctx context.Context, arg GetBattleForP
 }
 
 const getLineupSongs = `-- name: GetLineupSongs :many
-SELECT id, status, full_song_path, drums_path, bass_path, melody_path, vocals_path
+SELECT id, title, status, full_song_path, drums_path, bass_path, melody_path, vocals_path
 FROM songs WHERE id = ANY($1::uuid[])
 ORDER BY id
 FOR SHARE
@@ -112,6 +148,7 @@ FOR SHARE
 
 type GetLineupSongsRow struct {
 	ID           pgtype.UUID
+	Title        string
 	Status       string
 	FullSongPath pgtype.Text
 	DrumsPath    pgtype.Text
@@ -131,6 +168,7 @@ func (q *Queries) GetLineupSongs(ctx context.Context, songIds []pgtype.UUID) ([]
 		var i GetLineupSongsRow
 		if err := rows.Scan(
 			&i.ID,
+			&i.Title,
 			&i.Status,
 			&i.FullSongPath,
 			&i.DrumsPath,

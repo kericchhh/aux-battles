@@ -280,3 +280,29 @@ func TestFailedStartRollsBackLineupAndRoundActivation(t *testing.T) {
 		t.Fatalf("rollback view=%+v", view)
 	}
 }
+
+func TestLineupRejectsUnmatchableTitlesWithoutLocking(t *testing.T) {
+	l, ctx, users, id, root := lineupFixture(t, 1)
+	song := lineupSong(t, l, ctx, root, true)
+	for _, title := range []string{"!!!", "\u0301"} {
+		if _, err := l.pool.Exec(ctx, `UPDATE songs SET title=$2 WHERE id=$1`, song, title); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := l.SubmitLineup(ctx, users[0], id, []pgtype.UUID{song}); !errors.Is(err, ErrInvalidInput) {
+			t.Fatalf("title=%q lineup error=%v", title, err)
+		}
+		view, err := l.Get(ctx, users[0], id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if view.MyLineupLocked || view.Status != "SELECTING" {
+			t.Fatalf("rejected lineup persisted: %+v", view)
+		}
+	}
+	if _, err := l.pool.Exec(ctx, `UPDATE songs SET title='(Untitled)' WHERE id=$1`, song); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := l.SubmitLineup(ctx, users[0], id, []pgtype.UUID{song}); err != nil {
+		t.Fatalf("literal bracketed title rejected: %v", err)
+	}
+}
