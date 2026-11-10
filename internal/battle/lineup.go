@@ -122,6 +122,9 @@ func (l *Lobby) SubmitLineup(ctx context.Context, userID, battleID pgtype.UUID, 
 			return LineupResult{}, errors.New("round changed while saving lineup")
 		}
 	}
+	if err := touchBattle(ctx, q, battleID); err != nil {
+		return LineupResult{}, err
+	}
 	status := "WAITING_ON_OPPONENT"
 	if opponentCount == len(rounds) {
 		count, err := q.ActivateFirstRound(ctx, battleID)

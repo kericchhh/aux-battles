@@ -146,6 +146,7 @@ round one becomes `GUESSING`. These state changes are committed together.
 Subsequent submissions return `409`; nonparticipants receive `404`. Battle views
 show each player's lineup readiness without exposing selected song IDs.
 Live updates remain a subsequent step; poll the battle view to read progress.
+Battles can also end early; see [Ending battles early](#ending-battles-early).
 
 ## Playing rounds
 
@@ -204,6 +205,33 @@ The authenticated catalog audio route remains available for browsing curated
 tracks. Round-level stage gating does not prevent someone from identifying a
 song using the catalog or an external recognition tool; it is not an anti-cheat
 system.
+
+## Ending battles early
+
+A participant can quit with `POST /battles/{battleId}/forfeit`:
+
+```sh
+curl -b guest.cookies -X POST http://localhost:8080/battles/BATTLE_ID/forfeit
+```
+
+Forfeiting an unjoined lobby cancels it. Forfeiting during lineup selection or
+a round finishes the battle and awards it to the opponent. The response is the
+updated battle view; ended battles return `409` and nonparticipants `404`.
+
+Joining, submitting a lineup and guessing count as moves. Once a minute, the
+API ends battles without a recent move: lobbies after 15 minutes, lineup
+selection and rounds after 5. If the battle is waiting on only one player (an
+unlocked lineup, or an unfinished round the opponent has finished), that player
+loses. Otherwise the battle is cancelled with no winner.
+
+Battle views include `endReason` (`COMPLETED`, `FORFEIT` or `TIMEOUT`) once a
+battle ends. Cancelled battles have status `CANCELLED` and a `null` outcome.
+
+Migration `00005_battle_endings.sql` records activity times and end reasons and
+marks existing finished battles `COMPLETED`. Battles still running when it is
+applied count as active at that moment, so none can time out until five or
+fifteen minutes after the migration. Its rollback refuses, without
+changing data, while any battle is `CANCELLED`; it drops recorded end reasons.
 
 ### Scoring migration
 

@@ -9,7 +9,7 @@ SELECT id FROM battles WHERE invite_code = $1;
 
 -- name: JoinBattle :one
 UPDATE battles
-SET guest_id = sqlc.arg(user_id)::uuid, status = 'SELECTING'
+SET guest_id = sqlc.arg(user_id)::uuid, status = 'SELECTING', last_activity_at = now()
 WHERE id = sqlc.arg(id)::uuid AND status = 'PENDING'
   AND guest_id IS NULL AND host_id <> sqlc.arg(user_id)::uuid
 RETURNING id, round_count;
@@ -64,5 +64,23 @@ UPDATE battles SET current_round = current_round + 1
 WHERE id = $1 AND status = 'ONGOING' AND current_round = $2 AND current_round < round_count;
 
 -- name: FinishBattle :execrows
-UPDATE battles SET status = 'FINISHED', winner_id = sqlc.narg(winner_id)::uuid
+UPDATE battles SET status = 'FINISHED', end_reason = 'COMPLETED', winner_id = sqlc.narg(winner_id)::uuid
 WHERE id = sqlc.arg(id)::uuid AND status = 'ONGOING' AND current_round = round_count;
+
+-- name: TouchBattle :execrows
+UPDATE battles SET last_activity_at = now() WHERE id = $1;
+
+-- name: LockNextInactiveBattle :one
+SELECT * FROM battles
+WHERE (status = 'PENDING'
+        AND last_activity_at < now() - make_interval(secs => sqlc.arg(lobby_timeout_seconds)::float8))
+   OR (status IN ('SELECTING', 'ONGOING')
+        AND last_activity_at < now() - make_interval(secs => sqlc.arg(game_timeout_seconds)::float8))
+ORDER BY last_activity_at
+LIMIT 1
+FOR UPDATE SKIP LOCKED;
+
+-- name: EndBattle :execrows
+UPDATE battles
+SET status = sqlc.arg(status)::text, end_reason = sqlc.arg(end_reason)::text, winner_id = sqlc.narg(winner_id)::uuid
+WHERE id = sqlc.arg(id)::uuid AND status IN ('PENDING', 'SELECTING', 'ONGOING');

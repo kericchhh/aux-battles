@@ -205,4 +205,51 @@ func TestBattleLobbyHTTPWithPostgres(t *testing.T) {
 			t.Fatal("battle view exposes a selected song ID")
 		}
 	}
+
+	forfeitPath := path + "/forfeit"
+	for _, tc := range []struct {
+		path   string
+		cookie *http.Cookie
+		status int
+	}{
+		{"/battles/not-a-uuid/forfeit", cookies[1], http.StatusBadRequest},
+		{forfeitPath, cookies[2], http.StatusNotFound},
+		{forfeitPath, nil, http.StatusUnauthorized},
+	} {
+		if response := authTestRequest(handler, http.MethodPost, tc.path, "", tc.cookie); response.Code != tc.status {
+			t.Fatalf("forfeit %s=%d, want %d", tc.path, response.Code, tc.status)
+		}
+	}
+	forfeit := authTestRequest(handler, http.MethodPost, forfeitPath, "", cookies[1])
+	if forfeit.Code != http.StatusOK {
+		t.Fatalf("forfeit=%d %s", forfeit.Code, forfeit.Body.String())
+	}
+	if err := json.Unmarshal(forfeit.Body.Bytes(), &view); err != nil {
+		t.Fatal(err)
+	}
+	if view.Status != "FINISHED" || view.Outcome == nil || *view.Outcome != "LOSS" || view.EndReason == nil || *view.EndReason != "FORFEIT" {
+		t.Fatalf("forfeiting player view=%+v", view)
+	}
+	if err := json.Unmarshal(authTestRequest(handler, http.MethodGet, path, "", cookies[0]).Body.Bytes(), &view); err != nil {
+		t.Fatal(err)
+	}
+	if view.Outcome == nil || *view.Outcome != "WIN" {
+		t.Fatalf("opponent view=%+v", view)
+	}
+	if response := authTestRequest(handler, http.MethodPost, forfeitPath, "", cookies[0]); response.Code != http.StatusConflict {
+		t.Fatalf("forfeit ended battle=%d", response.Code)
+	}
+
+	lobby := authTestRequest(handler, http.MethodPost, "/battles", `{}`, cookies[0])
+	if err := json.Unmarshal(lobby.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	cancelled := authTestRequest(handler, http.MethodPost, "/battles/"+result.ID+"/forfeit", "", cookies[0])
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(cancelled.Body.Bytes(), &fields); err != nil {
+		t.Fatal(err)
+	}
+	if cancelled.Code != http.StatusOK || string(fields["status"]) != `"CANCELLED"` || string(fields["outcome"]) != "null" || string(fields["endReason"]) != `"FORFEIT"` {
+		t.Fatalf("cancelled lobby=%d %s", cancelled.Code, cancelled.Body.String())
+	}
 }

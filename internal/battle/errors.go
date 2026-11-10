@@ -34,6 +34,7 @@ var (
 	ErrNotFound              = &Error{Kind: NotFound, Message: "battle not found"}
 	ErrUnavailable           = &Error{Kind: Conflict, Message: "battle is full, already started, or belongs to you"}
 	ErrInviteExhausted       = &Error{Kind: Unavailable, Message: "could not allocate an invite code; retry"}
+	ErrBattleEnded           = &Error{Kind: Conflict, Message: "battle has already ended"}
 	ErrRoundUnavailable      = &Error{Kind: Conflict, Message: "round is not accepting this operation"}
 	ErrStaleAttempt          = &Error{Kind: Conflict, Message: "attempt already submitted or stale; refresh the battle"}
 	ErrRoundAudioUnavailable = &Error{Kind: Conflict, Message: "round audio is unavailable"}

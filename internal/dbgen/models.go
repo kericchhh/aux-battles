@@ -9,15 +9,17 @@ import (
 )
 
 type Battle struct {
-	ID           pgtype.UUID
-	HostID       pgtype.UUID
-	GuestID      pgtype.UUID
-	InviteCode   string
-	Status       string
-	RoundCount   int32
-	CurrentRound int32
-	WinnerID     pgtype.UUID
-	CreatedAt    pgtype.Timestamptz
+	ID             pgtype.UUID
+	HostID         pgtype.UUID
+	GuestID        pgtype.UUID
+	InviteCode     string
+	Status         string
+	RoundCount     int32
+	CurrentRound   int32
+	WinnerID       pgtype.UUID
+	CreatedAt      pgtype.Timestamptz
+	LastActivityAt pgtype.Timestamptz
+	EndReason      pgtype.Text
 }
 
 type Guess struct {

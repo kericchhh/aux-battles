@@ -114,6 +114,9 @@ func (l *Lobby) SubmitGuess(ctx context.Context, userID, roundID pgtype.UUID, gu
 	if count != 1 {
 		return GuessResult{}, errors.New("guess was not saved")
 	}
+	if err := touchBattle(ctx, q, b.ID); err != nil {
+		return GuessResult{}, err
+	}
 	updated, err := q.UpdateRoundPlayerProgress(ctx, dbgen.UpdateRoundPlayerProgressParams{ID: roundID, IsHost: isHost, Stage: result.Stage, Points: result.PointsAwarded, Finished: result.PlayerFinished})
 	if err != nil {
 		return GuessResult{}, fmt.Errorf("save player progress: %w", err)
@@ -199,4 +202,15 @@ func advanceBattle(ctx context.Context, q *dbgen.Queries, b dbgen.Battle) (strin
 		return "", errors.New("battle could not finish")
 	}
 	return "FINISHED", nil
+}
+
+func touchBattle(ctx context.Context, q *dbgen.Queries, id pgtype.UUID) error {
+	count, err := q.TouchBattle(ctx, id)
+	if err != nil {
+		return fmt.Errorf("record battle activity: %w", err)
+	}
+	if count != 1 {
+		return errors.New("battle disappeared while recording activity")
+	}
+	return nil
 }

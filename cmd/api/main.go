@@ -12,7 +12,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/kericchhh/aux-battles/internal/battle"
 	"github.com/kericchhh/aux-battles/internal/dbgen"
+	"github.com/kericchhh/aux-battles/internal/media"
 	"github.com/kericchhh/aux-battles/internal/observability"
 	"github.com/kericchhh/aux-battles/internal/server"
 	"golang.org/x/sync/errgroup"
@@ -21,6 +23,7 @@ import (
 const (
 	shutdownTimeout      = 8 * time.Second
 	sessionPruneInterval = time.Hour
+	battleSweepInterval  = time.Minute
 )
 
 func main() {
@@ -76,8 +79,17 @@ func run(logger *slog.Logger) error {
 		}
 		return nil
 	})
+	battles := battle.New(pool, media.FromEnv())
 	group.Go(func() error {
-		server.PruneSessions(groupCtx, queries, logger, sessionPruneInterval)
+		every(groupCtx, sessionPruneInterval, func(ctx context.Context) {
+			server.PruneSessions(ctx, queries, logger)
+		})
+		return nil
+	})
+	group.Go(func() error {
+		every(groupCtx, battleSweepInterval, func(ctx context.Context) {
+			server.ExpireBattles(ctx, battles, logger)
+		})
 		return nil
 	})
 	group.Go(func() error {
@@ -97,4 +109,17 @@ func run(logger *slog.Logger) error {
 		return nil
 	})
 	return group.Wait()
+}
+
+func every(ctx context.Context, interval time.Duration, run func(context.Context)) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		run(ctx)
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
 }

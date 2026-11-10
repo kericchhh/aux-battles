@@ -111,6 +111,7 @@ type View struct {
 	MyLineupLocked       bool          `json:"myLineupLocked"`
 	OpponentLineupLocked bool          `json:"opponentLineupLocked"`
 	Outcome              *string       `json:"outcome"`
+	EndReason            *string       `json:"endReason"`
 	MyScore              int32         `json:"myScore"`
 	OpponentScore        int32         `json:"opponentScore"`
 	Round                *RoundView    `json:"round"`
@@ -192,6 +193,9 @@ func participantView(b dbgen.Battle, rounds []dbgen.ListBattleRoundsRow, userID 
 			}
 		}
 		v.Outcome = &result
+	}
+	if b.EndReason.Valid {
+		v.EndReason = &b.EndReason.String
 	}
 	return v
 }

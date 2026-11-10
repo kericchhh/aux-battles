@@ -255,23 +255,13 @@ func newSessionToken() (token, tokenHash string, err error) {
 	return token, hex.EncodeToString(sum[:]), nil
 }
 
-func PruneSessions(ctx context.Context, queries *dbgen.Queries, logger *slog.Logger, interval time.Duration) {
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-	for {
-		deleted, err := queries.DeleteExpiredSessions(ctx)
-		switch {
-		case ctx.Err() != nil:
-			return
-		case err != nil:
-			logger.Error("delete expired sessions", "error", err)
-		case deleted > 0:
-			logger.Info("deleted expired sessions", "count", deleted)
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-		}
+func PruneSessions(ctx context.Context, queries *dbgen.Queries, logger *slog.Logger) {
+	deleted, err := queries.DeleteExpiredSessions(ctx)
+	switch {
+	case ctx.Err() != nil:
+	case err != nil:
+		logger.Error("delete expired sessions", "error", err)
+	case deleted > 0:
+		logger.Info("deleted expired sessions", "count", deleted)
 	}
 }

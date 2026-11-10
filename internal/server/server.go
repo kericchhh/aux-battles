@@ -31,6 +31,7 @@ func New(queries *dbgen.Queries, pool *pgxpool.Pool, logger *slog.Logger, secure
 	mux.HandleFunc("POST /battles/join", app.requireAuth(app.joinBattle))
 	mux.HandleFunc("GET /battles/{battleId}", app.requireAuth(app.getBattle))
 	mux.HandleFunc("PUT /battles/{battleId}/lineup", app.requireAuth(app.submitLineup))
+	mux.HandleFunc("POST /battles/{battleId}/forfeit", app.requireAuth(app.forfeitBattle))
 	mux.HandleFunc("GET /rounds/{roundId}/audio", app.requireAuth(app.getRoundAudio))
 	mux.HandleFunc("POST /rounds/{roundId}/guess", app.requireAuth(app.submitGuess))
 	mux.HandleFunc("GET /songs", app.listSongs)

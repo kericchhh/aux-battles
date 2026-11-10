@@ -82,8 +82,34 @@ func (q *Queries) CreateBattleRounds(ctx context.Context, arg CreateBattleRounds
 	return result.RowsAffected(), nil
 }
 
+const endBattle = `-- name: EndBattle :execrows
+UPDATE battles
+SET status = $1::text, end_reason = $2::text, winner_id = $3::uuid
+WHERE id = $4::uuid AND status IN ('PENDING', 'SELECTING', 'ONGOING')
+`
+
+type EndBattleParams struct {
+	Status    string
+	EndReason string
+	WinnerID  pgtype.UUID
+	ID        pgtype.UUID
+}
+
+func (q *Queries) EndBattle(ctx context.Context, arg EndBattleParams) (int64, error) {
+	result, err := q.db.Exec(ctx, endBattle,
+		arg.Status,
+		arg.EndReason,
+		arg.WinnerID,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const finishBattle = `-- name: FinishBattle :execrows
-UPDATE battles SET status = 'FINISHED', winner_id = $1::uuid
+UPDATE battles SET status = 'FINISHED', end_reason = 'COMPLETED', winner_id = $1::uuid
 WHERE id = $2::uuid AND status = 'ONGOING' AND current_round = round_count
 `
 
@@ -112,7 +138,7 @@ func (q *Queries) GetBattleByInvite(ctx context.Context, inviteCode string) (pgt
 }
 
 const getBattleForParticipant = `-- name: GetBattleForParticipant :one
-SELECT id, host_id, guest_id, invite_code, status, round_count, current_round, winner_id, created_at FROM battles
+SELECT id, host_id, guest_id, invite_code, status, round_count, current_round, winner_id, created_at, last_activity_at, end_reason FROM battles
 WHERE id = $1::uuid
   AND (host_id = $2::uuid OR guest_id = $2::uuid)
 `
@@ -135,6 +161,8 @@ func (q *Queries) GetBattleForParticipant(ctx context.Context, arg GetBattleForP
 		&i.CurrentRound,
 		&i.WinnerID,
 		&i.CreatedAt,
+		&i.LastActivityAt,
+		&i.EndReason,
 	)
 	return i, err
 }
@@ -188,7 +216,7 @@ func (q *Queries) GetLineupSongs(ctx context.Context, songIds []pgtype.UUID) ([]
 
 const joinBattle = `-- name: JoinBattle :one
 UPDATE battles
-SET guest_id = $1::uuid, status = 'SELECTING'
+SET guest_id = $1::uuid, status = 'SELECTING', last_activity_at = now()
 WHERE id = $2::uuid AND status = 'PENDING'
   AND guest_id IS NULL AND host_id <> $1::uuid
 RETURNING id, round_count
@@ -274,7 +302,7 @@ func (q *Queries) ListBattleRounds(ctx context.Context, arg ListBattleRoundsPara
 }
 
 const lockBattleForParticipant = `-- name: LockBattleForParticipant :one
-SELECT id, host_id, guest_id, invite_code, status, round_count, current_round, winner_id, created_at FROM battles
+SELECT id, host_id, guest_id, invite_code, status, round_count, current_round, winner_id, created_at, last_activity_at, end_reason FROM battles
 WHERE id = $1::uuid
   AND (host_id = $2::uuid OR guest_id = $2::uuid)
 FOR UPDATE
@@ -298,6 +326,43 @@ func (q *Queries) LockBattleForParticipant(ctx context.Context, arg LockBattleFo
 		&i.CurrentRound,
 		&i.WinnerID,
 		&i.CreatedAt,
+		&i.LastActivityAt,
+		&i.EndReason,
+	)
+	return i, err
+}
+
+const lockNextInactiveBattle = `-- name: LockNextInactiveBattle :one
+SELECT id, host_id, guest_id, invite_code, status, round_count, current_round, winner_id, created_at, last_activity_at, end_reason FROM battles
+WHERE (status = 'PENDING'
+        AND last_activity_at < now() - make_interval(secs => $1::float8))
+   OR (status IN ('SELECTING', 'ONGOING')
+        AND last_activity_at < now() - make_interval(secs => $2::float8))
+ORDER BY last_activity_at
+LIMIT 1
+FOR UPDATE SKIP LOCKED
+`
+
+type LockNextInactiveBattleParams struct {
+	LobbyTimeoutSeconds float64
+	GameTimeoutSeconds  float64
+}
+
+func (q *Queries) LockNextInactiveBattle(ctx context.Context, arg LockNextInactiveBattleParams) (Battle, error) {
+	row := q.db.QueryRow(ctx, lockNextInactiveBattle, arg.LobbyTimeoutSeconds, arg.GameTimeoutSeconds)
+	var i Battle
+	err := row.Scan(
+		&i.ID,
+		&i.HostID,
+		&i.GuestID,
+		&i.InviteCode,
+		&i.Status,
+		&i.RoundCount,
+		&i.CurrentRound,
+		&i.WinnerID,
+		&i.CreatedAt,
+		&i.LastActivityAt,
+		&i.EndReason,
 	)
 	return i, err
 }
@@ -345,6 +410,18 @@ WHERE id = $1 AND status = 'SELECTING' AND current_round = 1
 
 func (q *Queries) StartBattle(ctx context.Context, id pgtype.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, startBattle, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const touchBattle = `-- name: TouchBattle :execrows
+UPDATE battles SET last_activity_at = now() WHERE id = $1
+`
+
+func (q *Queries) TouchBattle(ctx context.Context, id pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, touchBattle, id)
 	if err != nil {
 		return 0, err
 	}

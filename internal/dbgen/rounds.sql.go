@@ -170,7 +170,7 @@ func (q *Queries) InsertRoundGuess(ctx context.Context, arg InsertRoundGuessPara
 }
 
 const lockRoundBattleForParticipant = `-- name: LockRoundBattleForParticipant :one
-SELECT b.id, b.host_id, b.guest_id, b.invite_code, b.status, b.round_count, b.current_round, b.winner_id, b.created_at FROM battles b JOIN rounds r ON r.battle_id = b.id
+SELECT b.id, b.host_id, b.guest_id, b.invite_code, b.status, b.round_count, b.current_round, b.winner_id, b.created_at, b.last_activity_at, b.end_reason FROM battles b JOIN rounds r ON r.battle_id = b.id
 WHERE r.id = $1::uuid
   AND (b.host_id = $2::uuid OR b.guest_id = $2::uuid)
 FOR UPDATE OF b
@@ -194,6 +194,8 @@ func (q *Queries) LockRoundBattleForParticipant(ctx context.Context, arg LockRou
 		&i.CurrentRound,
 		&i.WinnerID,
 		&i.CreatedAt,
+		&i.LastActivityAt,
+		&i.EndReason,
 	)
 	return i, err
 }

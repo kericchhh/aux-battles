@@ -1,8 +1,10 @@
 package server
 
 import (
+	"context"
 	"encoding/json/v2"
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -87,6 +89,38 @@ func (s *server) getBattle(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.MarshalWrite(w, view); err != nil {
 		s.loggerFor(r.Context()).Error("write battle view", "error", err)
+	}
+}
+
+func (s *server) forfeitBattle(w http.ResponseWriter, r *http.Request) {
+	userID, ok := s.battleActor(w, r)
+	if !ok {
+		return
+	}
+	var id pgtype.UUID
+	if err := id.Scan(r.PathValue("battleId")); err != nil || !id.Valid {
+		writeJSONError(w, http.StatusBadRequest, "invalid battle ID")
+		return
+	}
+	view, err := s.battles.Forfeit(r.Context(), userID, id)
+	if err != nil {
+		s.writeBattleError(w, r, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.MarshalWrite(w, view); err != nil {
+		s.loggerFor(r.Context()).Error("write forfeited battle view", "error", err)
+	}
+}
+
+func ExpireBattles(ctx context.Context, battles *battle.Lobby, logger *slog.Logger) {
+	ended, err := battles.ExpireInactive(ctx)
+	switch {
+	case ctx.Err() != nil:
+	case err != nil:
+		logger.Error("expire inactive battles", "ended", ended, "error", err)
+	case ended > 0:
+		logger.Info("expired inactive battles", "count", ended)
 	}
 }
 

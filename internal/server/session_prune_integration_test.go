@@ -7,30 +7,12 @@ import (
 	"log/slog"
 	"os"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/kericchhh/aux-battles/internal/dbgen"
 )
-
-type syncBuffer struct {
-	mu  sync.Mutex
-	buf bytes.Buffer
-}
-
-func (b *syncBuffer) Write(p []byte) (int, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.buf.Write(p)
-}
-
-func (b *syncBuffer) String() string {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.buf.String()
-}
 
 func TestPruneSessionsDeletesOnlyExpiredSessions(t *testing.T) {
 	url := os.Getenv("TEST_DATABASE_URL")
@@ -67,13 +49,8 @@ func TestPruneSessionsDeletesOnlyExpiredSessions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	logs := &syncBuffer{}
-	pruneCtx, cancel := context.WithCancel(ctx)
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		PruneSessions(pruneCtx, dbgen.New(pool), slog.New(slog.NewTextHandler(logs, nil)), 10*time.Millisecond)
-	}()
+	var logs bytes.Buffer
+	PruneSessions(ctx, dbgen.New(pool), slog.New(slog.NewTextHandler(&logs, nil)))
 
 	sessionExists := func(hash string) bool {
 		var exists bool
@@ -82,18 +59,8 @@ func TestPruneSessionsDeletesOnlyExpiredSessions(t *testing.T) {
 		}
 		return exists
 	}
-	deadline := time.Now().Add(5 * time.Second)
-	for sessionExists(expired) {
-		if time.Now().After(deadline) {
-			t.Fatal("expired session was not deleted")
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	cancel()
-	select {
-	case <-done:
-	case <-time.After(time.Second):
-		t.Fatal("PruneSessions did not stop after cancellation")
+	if sessionExists(expired) {
+		t.Fatal("expired session was not deleted")
 	}
 	if !sessionExists(valid) {
 		t.Fatal("valid session was deleted")
