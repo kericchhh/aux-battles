@@ -17,7 +17,7 @@ func lineupFixture(t *testing.T, rounds int32) (*Lobby, context.Context, []pgtyp
 	l, ctx, users := lobbyFixture(t)
 	root := t.TempDir()
 	l = New(l.pool, media.New(root))
-	id, err := l.Create(ctx, users[0], rounds)
+	id, err := l.Create(ctx, users[0], rounds, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +175,7 @@ func TestLineupValidationLeavesNoPartialChoices(t *testing.T) {
 				}
 			case "pending battle":
 				var err error
-				id, err = l.Create(ctx, u[0], 2)
+				id, err = l.Create(ctx, u[0], 2, 0)
 				if err != nil {
 					t.Fatal(err)
 				}

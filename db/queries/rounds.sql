@@ -21,8 +21,8 @@ SELECT count(*)::integer FROM guesses WHERE round_id = $1 AND user_id = $2;
 SELECT title FROM songs WHERE id = $1 AND status = 'READY' FOR SHARE;
 
 -- name: InsertRoundGuess :execrows
-INSERT INTO guesses(round_id, user_id, attempt, guess, correct, points_awarded)
-VALUES ($1, $2, $3, $4, $5, $6);
+INSERT INTO guesses(round_id, user_id, attempt, guess, correct, points_awarded, timed_out)
+VALUES ($1, $2, $3, $4, $5, $6, $7);
 
 -- name: UpdateRoundPlayerProgress :one
 UPDATE rounds SET
@@ -31,7 +31,9 @@ UPDATE rounds SET
     host_points = CASE WHEN sqlc.arg(is_host)::boolean THEN sqlc.arg(points)::integer ELSE host_points END,
     guest_points = CASE WHEN NOT sqlc.arg(is_host)::boolean THEN sqlc.arg(points)::integer ELSE guest_points END,
     host_finished = CASE WHEN sqlc.arg(is_host)::boolean THEN sqlc.arg(finished)::boolean ELSE host_finished END,
-    guest_finished = CASE WHEN NOT sqlc.arg(is_host)::boolean THEN sqlc.arg(finished)::boolean ELSE guest_finished END
+    guest_finished = CASE WHEN NOT sqlc.arg(is_host)::boolean THEN sqlc.arg(finished)::boolean ELSE guest_finished END,
+    host_stage_started_at = CASE WHEN sqlc.arg(is_host)::boolean THEN sqlc.arg(stage_started_at)::timestamptz ELSE host_stage_started_at END,
+    guest_stage_started_at = CASE WHEN NOT sqlc.arg(is_host)::boolean THEN sqlc.arg(stage_started_at)::timestamptz ELSE guest_stage_started_at END
 WHERE id = sqlc.arg(id)::uuid AND status = 'GUESSING'
   AND NOT CASE WHEN sqlc.arg(is_host)::boolean THEN host_finished ELSE guest_finished END
 RETURNING *;
@@ -41,7 +43,7 @@ UPDATE rounds SET status = 'FINISHED'
 WHERE id = $1 AND status = 'GUESSING' AND host_finished AND guest_finished;
 
 -- name: ActivateRound :execrows
-UPDATE rounds SET status = 'GUESSING'
+UPDATE rounds SET status = 'GUESSING', host_stage_started_at = now(), guest_stage_started_at = now()
 WHERE battle_id = $1 AND round_number = $2 AND status = 'WAITING'
   AND host_song_id IS NOT NULL AND guest_song_id IS NOT NULL;
 
@@ -58,3 +60,13 @@ FROM rounds r JOIN battles b ON b.id = r.battle_id
 LEFT JOIN songs s ON s.id = CASE WHEN b.host_id = sqlc.arg(user_id)::uuid THEN r.guest_song_id ELSE r.host_song_id END
 WHERE r.id = sqlc.arg(round_id)::uuid
   AND (b.host_id = sqlc.arg(user_id)::uuid OR b.guest_id = sqlc.arg(user_id)::uuid);
+
+-- name: CurrentTime :one
+SELECT now()::timestamptz;
+
+-- name: CountPlayedRoundGuesses :one
+SELECT count(*)::integer FROM guesses WHERE round_id = $1 AND NOT timed_out;
+
+-- name: GuessTimedOut :one
+SELECT coalesce(bool_or(timed_out), false)::boolean FROM guesses
+WHERE round_id = $1 AND user_id = $2 AND attempt = $3;

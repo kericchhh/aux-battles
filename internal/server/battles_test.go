@@ -24,6 +24,8 @@ func TestBattleRoutesRequireAuthentication(t *testing.T) {
 		{http.MethodPost, "/battles", `{}`},
 		{http.MethodPost, "/battles/join", `{"inviteCode":"ABC123"}`},
 		{http.MethodGet, "/battles/00000000-0000-4000-8000-000000000001", ""},
+		{http.MethodGet, "/battles/00000000-0000-4000-8000-000000000001/events", ""},
+		{http.MethodGet, "/users/me/stats", ""},
 		{http.MethodPut, "/battles/00000000-0000-4000-8000-000000000001/lineup", `{"songIds":[]}`},
 	} {
 		response := authTestRequest(authTestHandler(newAuthTestDB(), false), tc.method, tc.path, tc.body, nil)
@@ -70,7 +72,7 @@ func TestListBattlesResponseShape(t *testing.T) {
 	}
 	t.Cleanup(pool.Close)
 	db, cookie := catalogUser(t, pool)
-	handler := New(db, pool, slog.New(slog.NewTextHandler(io.Discard, nil)), false)
+	handler := New(db, pool, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), false)
 
 	response := authTestRequest(handler, http.MethodGet, "/battles", "", cookie)
 	if response.Code != http.StatusOK || response.Body.String() != "[]" {
@@ -115,5 +117,32 @@ func TestListBattlesResponseShape(t *testing.T) {
 	}
 	if _, ok := list[0]["lastActivityAt"]; !ok || len(list[0]) != len(want)+2 {
 		t.Errorf("fields = %s", response.Body.String())
+	}
+}
+
+func TestBattleRequestsRejectedBeforeDatabaseAccess(t *testing.T) {
+	db := newAuthTestDB()
+	var id pgtype.UUID
+	if err := id.Scan("00000000-0000-4000-8000-000000000001"); err != nil {
+		t.Fatal(err)
+	}
+	db.user = &authTestUser{id: id, username: "host", email: "host@example.com", role: "USER"}
+	token := "validation-token"
+	sum := sha256.Sum256([]byte(token))
+	db.sessions[hex.EncodeToString(sum[:])] = time.Now().Add(time.Hour)
+	handler := authTestHandler(db, false)
+	cookie := &http.Cookie{Name: "aux_session", Value: token}
+	for _, tc := range []struct {
+		method, path, body string
+		want               int
+	}{
+		{http.MethodPost, "/battles", `{"rounds":3,"guessSeconds":0}`, http.StatusBadRequest},
+		{http.MethodPost, "/battles", `{"rounds":3,"guessSeconds":20}`, http.StatusBadRequest},
+		{http.MethodGet, "/battles/not-a-uuid/events", "", http.StatusBadRequest},
+		{http.MethodGet, "/battles/00000000-0000-4000-8000-000000000001/events", "", http.StatusServiceUnavailable},
+	} {
+		if response := authTestRequest(handler, tc.method, tc.path, tc.body, cookie); response.Code != tc.want {
+			t.Errorf("%s %s %s = %d %s, want %d", tc.method, tc.path, tc.body, response.Code, response.Body.String(), tc.want)
+		}
 	}
 }

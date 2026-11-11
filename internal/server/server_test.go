@@ -22,7 +22,7 @@ import (
 func TestHealthHandler(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	New(nil, nil, logger, false).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	New(nil, nil, nil, logger, false).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/healthz", nil))
 	if recorder.Code != http.StatusOK || recorder.Body.String() != "ok\n" {
 		t.Fatalf("health response = %d %q", recorder.Code, recorder.Body.String())
 	}
@@ -30,7 +30,7 @@ func TestHealthHandler(t *testing.T) {
 
 func TestRequestMetricsCountNormalRequestsButNotScrapes(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	handler := New(nil, nil, logger, false)
+	handler := New(nil, nil, nil, logger, false)
 	beforeRequests := testutil.ToFloat64(apiRequests.WithLabelValues("GET /healthz", "200"))
 	beforeScrapes := testutil.ToFloat64(apiRequests.WithLabelValues("GET /metrics", "200"))
 	durationCount := func() uint64 {
@@ -64,7 +64,7 @@ func TestRequestMetricsCountNormalRequestsButNotScrapes(t *testing.T) {
 
 func TestSongUploadRequiresAuthentication(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	handler := New(nil, nil, logger, false)
+	handler := New(nil, nil, nil, logger, false)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/songs", nil))
 	if response.Code != http.StatusUnauthorized {
@@ -153,7 +153,7 @@ func TestAuthenticationErrorLogSharesRequestID(t *testing.T) {
 	db.getSessionErr = errors.New("database unavailable")
 	var output bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&output, nil))
-	handler := New(dbgen.New(db), nil, logger, false)
+	handler := New(dbgen.New(db), nil, nil, logger, false)
 	request := httptest.NewRequest(http.MethodGet, "/songs/00000000-0000-4000-8000-000000000001/status", nil)
 	request.AddCookie(&http.Cookie{Name: "aux_session", Value: "some-token"})
 	response := httptest.NewRecorder()
@@ -240,7 +240,7 @@ func TestRequestLoggingPreservesAudioByteRanges(t *testing.T) {
 
 func TestClientErrorsUseJSON(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	handler := New(nil, nil, logger, false)
+	handler := New(nil, nil, nil, logger, false)
 	tests := []struct {
 		name       string
 		method     string
@@ -280,7 +280,7 @@ func TestClientErrorsUseJSON(t *testing.T) {
 
 func TestLoginRejectsMissingCredentials(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	handler := New(nil, nil, logger, false)
+	handler := New(nil, nil, nil, logger, false)
 	request := httptest.NewRequest(http.MethodPost, "/users/login", strings.NewReader(`{"identifier":"","password":""}`))
 	request.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()

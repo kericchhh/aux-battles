@@ -8,14 +8,14 @@ import (
 
 func TestListShowsOnlyOwnBattlesActiveFirst(t *testing.T) {
 	l, ctx, u := lobbyFixture(t)
-	finished, err := l.Create(ctx, u[0], 1)
+	finished, err := l.Create(ctx, u[0], 1, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := l.Forfeit(ctx, u[0], finished); err != nil {
 		t.Fatal(err)
 	}
-	joined, err := l.Create(ctx, u[1], 2)
+	joined, err := l.Create(ctx, u[1], 2, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -26,11 +26,11 @@ func TestListShowsOnlyOwnBattlesActiveFirst(t *testing.T) {
 	if _, err := l.Join(ctx, u[0], code); err != nil {
 		t.Fatal(err)
 	}
-	pending, err := l.Create(ctx, u[0], 3)
+	pending, err := l.Create(ctx, u[0], 3, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	stranger, err := l.Create(ctx, u[2], 1)
+	stranger, err := l.Create(ctx, u[2], 1, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestListShowsOnlyOwnBattlesActiveFirst(t *testing.T) {
 func TestListIsCapped(t *testing.T) {
 	l, ctx, u := lobbyFixture(t)
 	for range maxListedBattles + 2 {
-		if _, err := l.Create(ctx, u[2], 1); err != nil {
+		if _, err := l.Create(ctx, u[2], 1, 0); err != nil {
 			t.Fatal(err)
 		}
 	}

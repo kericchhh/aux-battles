@@ -20,6 +20,7 @@ type Battle struct {
 	CreatedAt      pgtype.Timestamptz
 	LastActivityAt pgtype.Timestamptz
 	EndReason      pgtype.Text
+	GuessSeconds   pgtype.Int4
 }
 
 type Guess struct {
@@ -31,21 +32,24 @@ type Guess struct {
 	Correct       bool
 	PointsAwarded int32
 	CreatedAt     pgtype.Timestamptz
+	TimedOut      bool
 }
 
 type Round struct {
-	ID            pgtype.UUID
-	BattleID      pgtype.UUID
-	RoundNumber   int32
-	HostSongID    pgtype.UUID
-	GuestSongID   pgtype.UUID
-	HostStage     string
-	GuestStage    string
-	HostPoints    int32
-	GuestPoints   int32
-	HostFinished  bool
-	GuestFinished bool
-	Status        string
+	ID                  pgtype.UUID
+	BattleID            pgtype.UUID
+	RoundNumber         int32
+	HostSongID          pgtype.UUID
+	GuestSongID         pgtype.UUID
+	HostStage           string
+	GuestStage          string
+	HostPoints          int32
+	GuestPoints         int32
+	HostFinished        bool
+	GuestFinished       bool
+	Status              string
+	HostStageStartedAt  pgtype.Timestamptz
+	GuestStageStartedAt pgtype.Timestamptz
 }
 
 type Session struct {

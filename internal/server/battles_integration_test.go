@@ -56,7 +56,7 @@ func TestBattleLobbyHTTPWithPostgres(t *testing.T) {
 	}
 	root := t.TempDir()
 	t.Setenv("MEDIA_ROOT", root)
-	handler := New(dbgen.New(pool), pool, slog.New(slog.NewTextHandler(io.Discard, nil)), false)
+	handler := New(dbgen.New(pool), pool, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), false)
 	for _, body := range []string{`{"rounds":0}`, `{"rounds":8}`, `{"rounds":-1}`, `{"rounds":1.5}`, `{"rounds":null}`, `{"rounds":"7"}`, `{"rounds":7,"hostId":"spoofed"}`} {
 		response := authTestRequest(handler, http.MethodPost, "/battles", body, cookies[0])
 		if response.Code != http.StatusBadRequest {

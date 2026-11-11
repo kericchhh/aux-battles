@@ -17,7 +17,7 @@ import (
 )
 
 func TestSongAudioRequiresAuthentication(t *testing.T) {
-	handler := New(nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), false)
+	handler := New(nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), false)
 	request := httptest.NewRequest(http.MethodGet, "/songs/00000000-0000-4000-8000-000000000001/audio/drums", nil)
 	response := httptest.NewRecorder()
 
@@ -42,7 +42,7 @@ func TestSongAudioStreamsReadyMedia(t *testing.T) {
 
 	root := t.TempDir()
 	t.Setenv("MEDIA_ROOT", root)
-	handler := New(dbgen.New(pool), pool, slog.New(slog.NewTextHandler(io.Discard, nil)), false)
+	handler := New(dbgen.New(pool), pool, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), false)
 	username := fmt.Sprintf("audio_%d", time.Now().UnixNano())
 	register := authTestRequest(handler, http.MethodPost, "/users",
 		fmt.Sprintf(`{"username":%q,"email":%q,"password":"correct horse battery staple"}`,

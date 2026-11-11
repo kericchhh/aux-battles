@@ -13,8 +13,13 @@ import (
 func TestLobbyRejectsInvalidInputBeforeDatabaseAccess(t *testing.T) {
 	l := New(nil, media.New(""))
 	for _, n := range []int32{-1, 0, 8, 100} {
-		if _, err := l.Create(context.Background(), pgtype.UUID{}, n); !errors.Is(err, ErrInvalidInput) {
+		if _, err := l.Create(context.Background(), pgtype.UUID{}, n, 0); !errors.Is(err, ErrInvalidInput) {
 			t.Fatalf("rounds %d: %v", n, err)
+		}
+	}
+	for _, seconds := range []int32{-15, 1, 10, 20, 60} {
+		if _, err := l.Create(context.Background(), pgtype.UUID{}, 3, seconds); !errors.Is(err, ErrInvalidInput) {
+			t.Fatalf("guessSeconds %d: %v", seconds, err)
 		}
 	}
 	for _, code := range []string{"", "ABC", "ABCDEFG", "ABC-12", "ＡＢＣ１２３"} {

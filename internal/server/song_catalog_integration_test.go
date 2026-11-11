@@ -100,7 +100,7 @@ func TestCatalogSearchAndPaging(t *testing.T) {
 	}
 
 	db, cookie := catalogUser(t, pool)
-	handler := New(db, pool, slog.New(slog.NewTextHandler(io.Discard, nil)), false)
+	handler := New(db, pool, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), false)
 	var got []string
 	cursor := ""
 	for pages := 0; ; pages++ {

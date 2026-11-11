@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/kericchhh/aux-battles/internal/battle"
 	"github.com/kericchhh/aux-battles/internal/dbgen"
+	"github.com/kericchhh/aux-battles/internal/live"
 	"github.com/kericchhh/aux-battles/internal/media"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"golang.org/x/time/rate"
@@ -15,22 +16,24 @@ import (
 
 type server struct {
 	battles       *battle.Lobby
+	events        *live.Hub
 	queries       *dbgen.Queries
 	pool          *pgxpool.Pool
 	logger        *slog.Logger
 	secureCookies bool
 }
 
-func New(queries *dbgen.Queries, pool *pgxpool.Pool, logger *slog.Logger, secureCookies bool) http.Handler {
+func New(queries *dbgen.Queries, pool *pgxpool.Pool, events *live.Hub, logger *slog.Logger, secureCookies bool) http.Handler {
 	loginLimit := newIPLimiter(rate.Every(12*time.Second), 5)
 	registerLimit := newIPLimiter(rate.Every(time.Minute), 3)
-	app := &server{queries: queries, pool: pool, battles: battle.New(pool, media.FromEnv()), logger: logger, secureCookies: secureCookies}
+	app := &server{queries: queries, pool: pool, battles: battle.New(pool, media.FromEnv()), events: events, logger: logger, secureCookies: secureCookies}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", app.health)
 	mux.HandleFunc("GET /battles", app.requireAuth(app.listBattles))
 	mux.HandleFunc("POST /battles", app.requireAuth(app.createBattle))
 	mux.HandleFunc("POST /battles/join", app.requireAuth(app.joinBattle))
 	mux.HandleFunc("GET /battles/{battleId}", app.requireAuth(app.getBattle))
+	mux.HandleFunc("GET /battles/{battleId}/events", app.requireAuth(app.battleEvents))
 	mux.HandleFunc("PUT /battles/{battleId}/lineup", app.requireAuth(app.submitLineup))
 	mux.HandleFunc("POST /battles/{battleId}/forfeit", app.requireAuth(app.forfeitBattle))
 	mux.HandleFunc("GET /rounds/{roundId}/audio", app.requireAuth(app.getRoundAudio))
@@ -44,6 +47,7 @@ func New(queries *dbgen.Queries, pool *pgxpool.Pool, logger *slog.Logger, secure
 	mux.HandleFunc("POST /users/login", loginLimit.wrap(app.loginUser))
 	mux.HandleFunc("POST /users/logout", app.logoutUser)
 	mux.HandleFunc("GET /users/me", app.getCurrentUser)
+	mux.HandleFunc("GET /users/me/stats", app.requireAuth(app.getStats))
 	mux.Handle("GET /metrics", promhttp.Handler())
 	return logRequests(logger, mux)
 }

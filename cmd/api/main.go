@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/kericchhh/aux-battles/internal/battle"
 	"github.com/kericchhh/aux-battles/internal/dbgen"
+	"github.com/kericchhh/aux-battles/internal/live"
 	"github.com/kericchhh/aux-battles/internal/media"
 	"github.com/kericchhh/aux-battles/internal/observability"
 	"github.com/kericchhh/aux-battles/internal/server"
@@ -24,6 +25,7 @@ const (
 	shutdownTimeout      = 8 * time.Second
 	sessionPruneInterval = time.Hour
 	battleSweepInterval  = time.Minute
+	stageSweepInterval   = time.Second
 )
 
 func main() {
@@ -61,9 +63,10 @@ func run(logger *slog.Logger) error {
 	}
 
 	queries := dbgen.New(pool)
+	events := live.NewHub(pool, logger)
 	httpServer := &http.Server{
 		Addr:              ":8080",
-		Handler:           server.New(queries, pool, logger, os.Getenv("APP_ENV") == "production"),
+		Handler:           server.New(queries, pool, events, logger, os.Getenv("APP_ENV") == "production"),
 		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelError),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       30 * time.Second,
@@ -79,7 +82,17 @@ func run(logger *slog.Logger) error {
 		}
 		return nil
 	})
+	group.Go(func() error {
+		events.Run(groupCtx)
+		return nil
+	})
 	battles := battle.New(pool, media.FromEnv())
+	group.Go(func() error {
+		every(groupCtx, stageSweepInterval, func(ctx context.Context) {
+			server.ExpireStages(ctx, battles, logger)
+		})
+		return nil
+	})
 	group.Go(func() error {
 		every(groupCtx, sessionPruneInterval, func(ctx context.Context) {
 			server.PruneSessions(ctx, queries, logger)

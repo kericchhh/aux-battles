@@ -37,6 +37,7 @@ var (
 	ErrBattleEnded           = &Error{Kind: Conflict, Message: "battle has already ended"}
 	ErrRoundUnavailable      = &Error{Kind: Conflict, Message: "round is not accepting this operation"}
 	ErrStaleAttempt          = &Error{Kind: Conflict, Message: "attempt already submitted or stale; refresh the battle"}
+	ErrTimeExpired           = &Error{Kind: Conflict, Message: "time ran out on this stem; refresh the battle"}
 	ErrRoundAudioUnavailable = &Error{Kind: Conflict, Message: "round audio is unavailable"}
 	ErrLineupConflict        = &Error{Kind: Conflict, Message: "battle is not accepting this lineup"}
 	ErrSongNotFound          = &Error{Kind: NotFound, Message: "a selected song was not found"}

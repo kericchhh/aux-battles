@@ -33,7 +33,7 @@ func TestSongUploadQueuesJobWithPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer pool.Close()
-	handler := New(dbgen.New(pool), pool, slog.New(slog.NewTextHandler(io.Discard, nil)), false)
+	handler := New(dbgen.New(pool), pool, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), false)
 
 	username := fmt.Sprintf("upload_%d", time.Now().UnixNano())
 	registerBody := fmt.Sprintf(`{"username":%q,"email":%q,"password":"correct horse battery staple"}`, username, username+"@example.com")

@@ -32,7 +32,7 @@ func TestRoundGameplayHTTP(t *testing.T) {
 	t.Cleanup(pool.Close)
 	root := t.TempDir()
 	t.Setenv("MEDIA_ROOT", root)
-	handler := New(dbgen.New(pool), pool, slog.New(slog.NewTextHandler(io.Discard, nil)), false)
+	handler := New(dbgen.New(pool), pool, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), false)
 	cookies := make([]*http.Cookie, 3)
 	for i := range cookies {
 		var id string

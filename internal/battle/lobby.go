@@ -25,13 +25,16 @@ type Lobby struct {
 
 func New(pool *pgxpool.Pool, store media.Store) *Lobby { return &Lobby{pool: pool, media: store} }
 
-func (l *Lobby) Create(ctx context.Context, userID pgtype.UUID, rounds int32) (pgtype.UUID, error) {
-	return l.create(ctx, userID, rounds, newInviteCode)
+func (l *Lobby) Create(ctx context.Context, userID pgtype.UUID, rounds, guessSeconds int32) (pgtype.UUID, error) {
+	return l.create(ctx, userID, rounds, guessSeconds, newInviteCode)
 }
 
-func (l *Lobby) create(ctx context.Context, userID pgtype.UUID, rounds int32, generate func() (string, error)) (pgtype.UUID, error) {
+func (l *Lobby) create(ctx context.Context, userID pgtype.UUID, rounds, guessSeconds int32, generate func() (string, error)) (pgtype.UUID, error) {
 	if rounds < 1 || rounds > MaxRounds {
 		return pgtype.UUID{}, invalidInput("rounds must be between 1 and 7")
+	}
+	if guessSeconds != 0 && guessSeconds != 15 && guessSeconds != 30 {
+		return pgtype.UUID{}, invalidInput("guessSeconds must be 15, 30 or null")
 	}
 	q := dbgen.New(l.pool)
 	for range 5 {
@@ -39,7 +42,8 @@ func (l *Lobby) create(ctx context.Context, userID pgtype.UUID, rounds int32, ge
 		if err != nil {
 			return pgtype.UUID{}, fmt.Errorf("generate battle invite: %w", err)
 		}
-		id, err := q.CreateBattle(ctx, dbgen.CreateBattleParams{HostID: userID, InviteCode: code, RoundCount: rounds})
+		id, err := q.CreateBattle(ctx, dbgen.CreateBattleParams{HostID: userID, InviteCode: code, RoundCount: rounds,
+			GuessSeconds: pgtype.Int4{Int32: guessSeconds, Valid: guessSeconds != 0}})
 		if errors.Is(err, pgx.ErrNoRows) {
 			continue
 		}
@@ -108,6 +112,7 @@ type View struct {
 	InviteCode           string        `json:"inviteCode"`
 	CurrentRound         int32         `json:"currentRound"`
 	Rounds               int32         `json:"rounds"`
+	GuessSeconds         *int32        `json:"guessSeconds"`
 	Me                   Player        `json:"me"`
 	Opponent             *Player       `json:"opponent"`
 	OpponentJoined       bool          `json:"opponentJoined"`
@@ -119,6 +124,7 @@ type View struct {
 	OpponentScore        int32         `json:"opponentScore"`
 	Round                *RoundView    `json:"round"`
 	CompletedRounds      []RoundResult `json:"completedRounds"`
+	ServerTime           time.Time     `json:"serverTime"`
 }
 
 type Player struct {
@@ -126,14 +132,15 @@ type Player struct {
 }
 
 type RoundView struct {
-	ID               string `json:"id"`
-	Number           int32  `json:"number"`
-	Status           string `json:"status"`
-	MyStage          string `json:"myStage"`
-	MyPoints         int32  `json:"myPoints"`
-	MyFinished       bool   `json:"myFinished"`
-	OpponentFinished bool   `json:"opponentFinished"`
-	MyAttempts       int32  `json:"myAttempts"`
+	ID               string     `json:"id"`
+	Number           int32      `json:"number"`
+	Status           string     `json:"status"`
+	MyStage          string     `json:"myStage"`
+	MyPoints         int32      `json:"myPoints"`
+	MyFinished       bool       `json:"myFinished"`
+	OpponentFinished bool       `json:"opponentFinished"`
+	MyAttempts       int32      `json:"myAttempts"`
+	StageEndsAt      *time.Time `json:"stageEndsAt"`
 }
 
 type RoundResult struct {
@@ -185,7 +192,13 @@ func loadView(ctx context.Context, q *dbgen.Queries, userID, id pgtype.UUID) (Vi
 	if err != nil {
 		return View{}, fmt.Errorf("read finished round songs: %w", err)
 	}
-	return participantView(b, players, rounds, songs, userID), nil
+	now, err := q.CurrentTime(ctx)
+	if err != nil {
+		return View{}, fmt.Errorf("read database time: %w", err)
+	}
+	view := participantView(b, players, rounds, songs, userID)
+	view.ServerTime = now.Time
+	return view, nil
 }
 
 func participantView(b dbgen.Battle, players dbgen.GetBattlePlayersRow, rounds []dbgen.ListBattleRoundsRow, songs []dbgen.ListFinishedRoundSongsRow, userID pgtype.UUID) View {
@@ -194,6 +207,9 @@ func participantView(b dbgen.Battle, players dbgen.GetBattlePlayersRow, rounds [
 		Me: Player{Username: players.HostUsername}, OpponentJoined: b.GuestID.Valid,
 		MyLineupLocked: len(rounds) == int(b.RoundCount), OpponentLineupLocked: len(rounds) == int(b.RoundCount),
 		CompletedRounds: make([]RoundResult, 0, len(songs))}
+	if b.GuessSeconds.Valid {
+		v.GuessSeconds = &b.GuessSeconds.Int32
+	}
 	if players.GuestUsername.Valid {
 		v.Opponent = &Player{Username: players.GuestUsername.String}
 	}
@@ -208,11 +224,11 @@ func participantView(b dbgen.Battle, players dbgen.GetBattlePlayersRow, rounds [
 	for _, r := range rounds {
 		mySong, opponentSong := r.HostSongID, r.GuestSongID
 		myPoints, opponentPoints := r.HostPoints, r.GuestPoints
-		myStage, myFinished, opponentFinished := r.HostStage, r.HostFinished, r.GuestFinished
+		myStage, myFinished, opponentFinished, myStart := r.HostStage, r.HostFinished, r.GuestFinished, r.HostStageStartedAt
 		if !isHost {
 			mySong, opponentSong = opponentSong, mySong
 			myPoints, opponentPoints = opponentPoints, myPoints
-			myStage, myFinished, opponentFinished = r.GuestStage, r.GuestFinished, r.HostFinished
+			myStage, myFinished, opponentFinished, myStart = r.GuestStage, r.GuestFinished, r.HostFinished, r.GuestStageStartedAt
 		}
 		v.MyLineupLocked = v.MyLineupLocked && mySong.Valid
 		v.OpponentLineupLocked = v.OpponentLineupLocked && opponentSong.Valid
@@ -222,6 +238,9 @@ func participantView(b dbgen.Battle, players dbgen.GetBattlePlayersRow, rounds [
 		}
 		if b.Status == "ONGOING" && r.RoundNumber == b.CurrentRound {
 			v.Round = &RoundView{ID: r.ID.String(), Number: r.RoundNumber, Status: r.Status, MyStage: myStage, MyPoints: myPoints, MyFinished: myFinished, OpponentFinished: opponentFinished, MyAttempts: r.MyAttempts}
+			if deadline, ok := stageDeadline(b, side{finished: myFinished, startedAt: myStart}); ok {
+				v.Round.StageEndsAt = &deadline
+			}
 		}
 		if s, ok := revealed[r.RoundNumber]; ok && r.Status == "FINISHED" {
 			result := RoundResult{Number: r.RoundNumber, MyPoints: myPoints, OpponentPoints: opponentPoints,

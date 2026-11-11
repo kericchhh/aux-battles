@@ -12,7 +12,7 @@ import (
 )
 
 const activateRound = `-- name: ActivateRound :execrows
-UPDATE rounds SET status = 'GUESSING'
+UPDATE rounds SET status = 'GUESSING', host_stage_started_at = now(), guest_stage_started_at = now()
 WHERE battle_id = $1 AND round_number = $2 AND status = 'WAITING'
   AND host_song_id IS NOT NULL AND guest_song_id IS NOT NULL
 `
@@ -30,6 +30,17 @@ func (q *Queries) ActivateRound(ctx context.Context, arg ActivateRoundParams) (i
 	return result.RowsAffected(), nil
 }
 
+const countPlayedRoundGuesses = `-- name: CountPlayedRoundGuesses :one
+SELECT count(*)::integer FROM guesses WHERE round_id = $1 AND NOT timed_out
+`
+
+func (q *Queries) CountPlayedRoundGuesses(ctx context.Context, roundID pgtype.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, countPlayedRoundGuesses, roundID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const countRoundGuesses = `-- name: CountRoundGuesses :one
 SELECT count(*)::integer FROM guesses WHERE round_id = $1 AND user_id = $2
 `
@@ -42,6 +53,17 @@ type CountRoundGuessesParams struct {
 func (q *Queries) CountRoundGuesses(ctx context.Context, arg CountRoundGuessesParams) (int32, error) {
 	row := q.db.QueryRow(ctx, countRoundGuesses, arg.RoundID, arg.UserID)
 	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const currentTime = `-- name: CurrentTime :one
+SELECT now()::timestamptz
+`
+
+func (q *Queries) CurrentTime(ctx context.Context) (pgtype.Timestamptz, error) {
+	row := q.db.QueryRow(ctx, currentTime)
+	var column_1 pgtype.Timestamptz
 	err := row.Scan(&column_1)
 	return column_1, err
 }
@@ -140,9 +162,27 @@ func (q *Queries) GetRoundAudioForParticipant(ctx context.Context, arg GetRoundA
 	return i, err
 }
 
+const guessTimedOut = `-- name: GuessTimedOut :one
+SELECT coalesce(bool_or(timed_out), false)::boolean FROM guesses
+WHERE round_id = $1 AND user_id = $2 AND attempt = $3
+`
+
+type GuessTimedOutParams struct {
+	RoundID pgtype.UUID
+	UserID  pgtype.UUID
+	Attempt int32
+}
+
+func (q *Queries) GuessTimedOut(ctx context.Context, arg GuessTimedOutParams) (bool, error) {
+	row := q.db.QueryRow(ctx, guessTimedOut, arg.RoundID, arg.UserID, arg.Attempt)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const insertRoundGuess = `-- name: InsertRoundGuess :execrows
-INSERT INTO guesses(round_id, user_id, attempt, guess, correct, points_awarded)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO guesses(round_id, user_id, attempt, guess, correct, points_awarded, timed_out)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 `
 
 type InsertRoundGuessParams struct {
@@ -152,6 +192,7 @@ type InsertRoundGuessParams struct {
 	Guess         string
 	Correct       bool
 	PointsAwarded int32
+	TimedOut      bool
 }
 
 func (q *Queries) InsertRoundGuess(ctx context.Context, arg InsertRoundGuessParams) (int64, error) {
@@ -162,6 +203,7 @@ func (q *Queries) InsertRoundGuess(ctx context.Context, arg InsertRoundGuessPara
 		arg.Guess,
 		arg.Correct,
 		arg.PointsAwarded,
+		arg.TimedOut,
 	)
 	if err != nil {
 		return 0, err
@@ -170,7 +212,7 @@ func (q *Queries) InsertRoundGuess(ctx context.Context, arg InsertRoundGuessPara
 }
 
 const lockRoundBattleForParticipant = `-- name: LockRoundBattleForParticipant :one
-SELECT b.id, b.host_id, b.guest_id, b.invite_code, b.status, b.round_count, b.current_round, b.winner_id, b.created_at, b.last_activity_at, b.end_reason FROM battles b JOIN rounds r ON r.battle_id = b.id
+SELECT b.id, b.host_id, b.guest_id, b.invite_code, b.status, b.round_count, b.current_round, b.winner_id, b.created_at, b.last_activity_at, b.end_reason, b.guess_seconds FROM battles b JOIN rounds r ON r.battle_id = b.id
 WHERE r.id = $1::uuid
   AND (b.host_id = $2::uuid OR b.guest_id = $2::uuid)
 FOR UPDATE OF b
@@ -196,12 +238,13 @@ func (q *Queries) LockRoundBattleForParticipant(ctx context.Context, arg LockRou
 		&i.CreatedAt,
 		&i.LastActivityAt,
 		&i.EndReason,
+		&i.GuessSeconds,
 	)
 	return i, err
 }
 
 const lockRoundForBattle = `-- name: LockRoundForBattle :one
-SELECT id, battle_id, round_number, host_song_id, guest_song_id, host_stage, guest_stage, host_points, guest_points, host_finished, guest_finished, status FROM rounds WHERE id = $1 AND battle_id = $2 FOR UPDATE
+SELECT id, battle_id, round_number, host_song_id, guest_song_id, host_stage, guest_stage, host_points, guest_points, host_finished, guest_finished, status, host_stage_started_at, guest_stage_started_at FROM rounds WHERE id = $1 AND battle_id = $2 FOR UPDATE
 `
 
 type LockRoundForBattleParams struct {
@@ -225,6 +268,8 @@ func (q *Queries) LockRoundForBattle(ctx context.Context, arg LockRoundForBattle
 		&i.HostFinished,
 		&i.GuestFinished,
 		&i.Status,
+		&i.HostStageStartedAt,
+		&i.GuestStageStartedAt,
 	)
 	return i, err
 }
@@ -236,18 +281,21 @@ UPDATE rounds SET
     host_points = CASE WHEN $1::boolean THEN $3::integer ELSE host_points END,
     guest_points = CASE WHEN NOT $1::boolean THEN $3::integer ELSE guest_points END,
     host_finished = CASE WHEN $1::boolean THEN $4::boolean ELSE host_finished END,
-    guest_finished = CASE WHEN NOT $1::boolean THEN $4::boolean ELSE guest_finished END
-WHERE id = $5::uuid AND status = 'GUESSING'
+    guest_finished = CASE WHEN NOT $1::boolean THEN $4::boolean ELSE guest_finished END,
+    host_stage_started_at = CASE WHEN $1::boolean THEN $5::timestamptz ELSE host_stage_started_at END,
+    guest_stage_started_at = CASE WHEN NOT $1::boolean THEN $5::timestamptz ELSE guest_stage_started_at END
+WHERE id = $6::uuid AND status = 'GUESSING'
   AND NOT CASE WHEN $1::boolean THEN host_finished ELSE guest_finished END
-RETURNING id, battle_id, round_number, host_song_id, guest_song_id, host_stage, guest_stage, host_points, guest_points, host_finished, guest_finished, status
+RETURNING id, battle_id, round_number, host_song_id, guest_song_id, host_stage, guest_stage, host_points, guest_points, host_finished, guest_finished, status, host_stage_started_at, guest_stage_started_at
 `
 
 type UpdateRoundPlayerProgressParams struct {
-	IsHost   bool
-	Stage    string
-	Points   int32
-	Finished bool
-	ID       pgtype.UUID
+	IsHost         bool
+	Stage          string
+	Points         int32
+	Finished       bool
+	StageStartedAt pgtype.Timestamptz
+	ID             pgtype.UUID
 }
 
 func (q *Queries) UpdateRoundPlayerProgress(ctx context.Context, arg UpdateRoundPlayerProgressParams) (Round, error) {
@@ -256,6 +304,7 @@ func (q *Queries) UpdateRoundPlayerProgress(ctx context.Context, arg UpdateRound
 		arg.Stage,
 		arg.Points,
 		arg.Finished,
+		arg.StageStartedAt,
 		arg.ID,
 	)
 	var i Round
@@ -272,6 +321,8 @@ func (q *Queries) UpdateRoundPlayerProgress(ctx context.Context, arg UpdateRound
 		&i.HostFinished,
 		&i.GuestFinished,
 		&i.Status,
+		&i.HostStageStartedAt,
+		&i.GuestStageStartedAt,
 	)
 	return i, err
 }

@@ -5,16 +5,16 @@ it, see the [development guide](development.md).
 
 ## Jobs and media
 
-Both processes use `./storage` by default. Set the same `MEDIA_ROOT` for both
-when using another directory. Uploads create queued jobs. The worker extracts
-the selected 12-second clip, creates four stems, and changes the song status to
-`READY` after all files are present. A failed job makes up to three attempts;
-expired leases let another worker resume after a crash. Only `READY` songs
-appear in the catalog. Each processing attempt is limited to 30 minutes by
-default; set `WORKER_ATTEMPT_TIMEOUT` to a positive Go duration such as `45m`
-to change it. The worker also checks the media volume at startup and hourly,
-removing old abandoned attempts and inputs while preserving active attempts
-and files referenced by songs.
+The API and worker share the media directory set by `MEDIA_ROOT` (see the
+[development guide](development.md)). Uploads create queued jobs. The worker
+extracts the selected 12-second clip, creates four stems, and changes the song
+status to `READY` after all files are present. A failed job makes up to three
+attempts; expired leases let another worker resume after a crash. Only `READY`
+songs appear in the catalog. Each processing attempt is limited to 30 minutes by
+default; set `WORKER_ATTEMPT_TIMEOUT` to a positive Go duration such as `45m` to
+change it. The worker also checks the media volume at startup and hourly,
+removing old abandoned attempts and inputs while preserving active attempts and
+files referenced by songs.
 
 ## Process handling
 

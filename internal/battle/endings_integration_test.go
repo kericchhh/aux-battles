@@ -58,7 +58,7 @@ func roundIDFor(t *testing.T, l *Lobby, ctx context.Context, user, id pgtype.UUI
 
 func TestForfeitInEachBattleState(t *testing.T) {
 	l, ctx, users := lobbyFixture(t)
-	pending, err := l.Create(ctx, users[0], 1)
+	pending, err := l.Create(ctx, users[0], 1, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,12 +117,12 @@ func TestForfeitInEachBattleState(t *testing.T) {
 
 func TestExpireInactiveEndsOnlyStaleBattles(t *testing.T) {
 	l, ctx, users := lobbyFixture(t)
-	stalePending, err := l.Create(ctx, users[0], 1)
+	stalePending, err := l.Create(ctx, users[0], 1, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	backdateBattle(t, l, ctx, stalePending, lobbyTimeout+time.Minute)
-	freshPending, err := l.Create(ctx, users[0], 1)
+	freshPending, err := l.Create(ctx, users[0], 1, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +175,7 @@ func TestExpireInactiveEndsOnlyStaleBattles(t *testing.T) {
 
 func TestMovesRecordActivityAndCompletionReason(t *testing.T) {
 	l, ctx, users := lobbyFixture(t)
-	id, err := l.Create(ctx, users[0], 1)
+	id, err := l.Create(ctx, users[0], 1, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

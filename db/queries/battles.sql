@@ -1,6 +1,6 @@
 -- name: CreateBattle :one
-INSERT INTO battles (host_id, invite_code, round_count)
-VALUES ($1, $2, $3)
+INSERT INTO battles (host_id, invite_code, round_count, guess_seconds)
+VALUES (sqlc.arg(host_id)::uuid, sqlc.arg(invite_code)::text, sqlc.arg(round_count)::integer, sqlc.narg(guess_seconds)::integer)
 ON CONFLICT (invite_code) DO NOTHING
 RETURNING id;
 
@@ -51,7 +51,7 @@ UPDATE rounds SET guest_song_id = sqlc.arg(song_id)::uuid
 WHERE id = sqlc.arg(id)::uuid AND status = 'WAITING' AND guest_song_id IS NULL;
 
 -- name: ActivateFirstRound :execrows
-UPDATE rounds SET status = 'GUESSING'
+UPDATE rounds SET status = 'GUESSING', host_stage_started_at = now(), guest_stage_started_at = now()
 WHERE battle_id = $1 AND round_number = 1 AND status = 'WAITING'
   AND host_song_id IS NOT NULL AND guest_song_id IS NOT NULL;
 
@@ -117,3 +117,37 @@ WHERE b.host_id = sqlc.arg(user_id)::uuid OR b.guest_id = sqlc.arg(user_id)::uui
 GROUP BY b.id, o.username
 ORDER BY b.status IN ('PENDING', 'SELECTING', 'ONGOING') DESC, b.last_activity_at DESC, b.id
 LIMIT sqlc.arg(max_battles)::integer;
+
+-- name: LockNextExpiredStage :one
+SELECT sqlc.embed(b), r.id AS round_id
+FROM battles b
+JOIN rounds r ON r.battle_id = b.id AND r.round_number = b.current_round
+WHERE b.status = 'ONGOING' AND b.guess_seconds IS NOT NULL AND r.status = 'GUESSING'
+  AND NOT b.id = ANY(coalesce(sqlc.arg(skip_ids)::uuid[], '{}'))
+  AND ((NOT r.host_finished AND r.host_stage_started_at
+            + make_interval(secs => b.guess_seconds + sqlc.arg(grace_seconds)::float8) <= now())
+    OR (NOT r.guest_finished AND r.guest_stage_started_at
+            + make_interval(secs => b.guess_seconds + sqlc.arg(grace_seconds)::float8) <= now()))
+ORDER BY least(CASE WHEN NOT r.host_finished THEN r.host_stage_started_at END,
+    CASE WHEN NOT r.guest_finished THEN r.guest_stage_started_at END)
+    + make_interval(secs => b.guess_seconds)
+LIMIT 1
+FOR UPDATE OF b SKIP LOCKED;
+
+-- name: GetPlayerStats :one
+WITH finished AS (
+    SELECT b.winner_id,
+        coalesce(sum(CASE WHEN b.host_id = sqlc.arg(user_id)::uuid THEN r.host_points ELSE r.guest_points END), 0) AS score
+    FROM battles b
+    LEFT JOIN rounds r ON r.battle_id = b.id
+    WHERE b.status = 'FINISHED'
+      AND (b.host_id = sqlc.arg(user_id)::uuid OR b.guest_id = sqlc.arg(user_id)::uuid)
+    GROUP BY b.id
+)
+SELECT count(*)::integer AS played,
+    count(*) FILTER (WHERE winner_id = sqlc.arg(user_id)::uuid)::integer AS wins,
+    count(*) FILTER (WHERE winner_id <> sqlc.arg(user_id)::uuid)::integer AS losses,
+    count(*) FILTER (WHERE winner_id IS NULL)::integer AS draws,
+    coalesce(max(score), 0)::integer AS best_score,
+    coalesce(round(avg(score)), 0)::integer AS average_score
+FROM finished;

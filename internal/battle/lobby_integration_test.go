@@ -50,7 +50,7 @@ func lobbyFixture(t *testing.T) (*Lobby, context.Context, []pgtype.UUID) {
 
 func TestLobbyConcurrentJoinAndParticipantView(t *testing.T) {
 	l, ctx, u := lobbyFixture(t)
-	id, err := l.Create(ctx, u[0], 7)
+	id, err := l.Create(ctx, u[0], 7, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +120,7 @@ func TestLobbyConcurrentJoinAndParticipantView(t *testing.T) {
 
 func TestLobbyJoinRollsBackWhenRoundCreationFails(t *testing.T) {
 	l, ctx, u := lobbyFixture(t)
-	id, err := l.Create(ctx, u[0], 5)
+	id, err := l.Create(ctx, u[0], 5, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,11 +153,11 @@ func TestLobbyJoinRollsBackWhenRoundCreationFails(t *testing.T) {
 func TestLobbyRoundLimitAndInviteCollisions(t *testing.T) {
 	l, ctx, u := lobbyFixture(t)
 	for _, rounds := range []int32{-1, 0, 8, 10} {
-		if _, err := l.Create(ctx, u[0], rounds); !errors.Is(err, ErrInvalidInput) {
+		if _, err := l.Create(ctx, u[0], rounds, 0); !errors.Is(err, ErrInvalidInput) {
 			t.Fatalf("rounds=%d: %v", rounds, err)
 		}
 	}
-	id, err := l.Create(ctx, u[0], 1)
+	id, err := l.Create(ctx, u[0], 1, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +166,7 @@ func TestLobbyRoundLimitAndInviteCollisions(t *testing.T) {
 		t.Fatal(err)
 	}
 	calls := 0
-	_, err = l.create(ctx, u[0], 5, func() (string, error) { calls++; return view.InviteCode, nil })
+	_, err = l.create(ctx, u[0], 5, 0, func() (string, error) { calls++; return view.InviteCode, nil })
 	if !errors.Is(err, ErrInviteExhausted) || calls != 5 {
 		t.Fatalf("collision retry: calls=%d err=%v", calls, err)
 	}

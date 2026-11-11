@@ -28,12 +28,21 @@ func (s *server) createBattle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	input := struct {
-		Rounds int32 `json:"rounds"`
+		Rounds       int32  `json:"rounds"`
+		GuessSeconds *int32 `json:"guessSeconds"`
 	}{Rounds: 5}
 	if !readJSON(w, r, &input) {
 		return
 	}
-	id, err := s.battles.Create(r.Context(), userID, input.Rounds)
+	var guessSeconds int32
+	if input.GuessSeconds != nil {
+		guessSeconds = *input.GuessSeconds
+		if guessSeconds == 0 {
+			writeJSONError(w, http.StatusBadRequest, "guessSeconds must be 15, 30 or null")
+			return
+		}
+	}
+	id, err := s.battles.Create(r.Context(), userID, input.Rounds, guessSeconds)
 	if err != nil {
 		s.writeBattleError(w, r, err)
 		return
@@ -126,6 +135,34 @@ func (s *server) forfeitBattle(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.MarshalWrite(w, view); err != nil {
 		s.loggerFor(r.Context()).Error("write forfeited battle view", "error", err)
+	}
+}
+
+func (s *server) getStats(w http.ResponseWriter, r *http.Request) {
+	userID, ok := s.battleActor(w, r)
+	if !ok {
+		return
+	}
+	stats, err := s.battles.Stats(r.Context(), userID)
+	if err != nil {
+		s.writeBattleError(w, r, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	if err := json.MarshalWrite(w, stats); err != nil {
+		s.loggerFor(r.Context()).Error("write player stats", "error", err)
+	}
+}
+
+func ExpireStages(ctx context.Context, battles *battle.Lobby, logger *slog.Logger) {
+	expired, err := battles.ExpireStages(ctx)
+	switch {
+	case ctx.Err() != nil:
+	case err != nil:
+		logger.Error("expire timed out stages", "expired", expired, "error", err)
+	case expired > 0:
+		logger.Info("expired timed out stages", "count", expired)
 	}
 }
 

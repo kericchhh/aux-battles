@@ -25,6 +25,7 @@ func TestBattleErrorResponsesKeepInternalDetailsPrivate(t *testing.T) {
 		{"invalid input", battle.ErrInvalidInput, 400, "invalid battle input", false},
 		{"not found", battle.ErrSongNotFound, 404, "a selected song was not found", false},
 		{"conflict", battle.ErrLineupConflict, 409, "battle is not accepting this lineup", false},
+		{"time expired", battle.ErrTimeExpired, 409, "time ran out on this stem; refresh the battle", false},
 		{"unavailable", battle.ErrInviteExhausted, 503, "could not allocate an invite code; retry", false},
 		{"wrapped public error", fmt.Errorf("private context: %w", battle.ErrNotFound), 404, "battle not found", false},
 		{"internal error", errors.New("private database details"), 500, "could not complete battle operation", true},

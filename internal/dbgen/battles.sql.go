@@ -12,7 +12,7 @@ import (
 )
 
 const activateFirstRound = `-- name: ActivateFirstRound :execrows
-UPDATE rounds SET status = 'GUESSING'
+UPDATE rounds SET status = 'GUESSING', host_stage_started_at = now(), guest_stage_started_at = now()
 WHERE battle_id = $1 AND round_number = 1 AND status = 'WAITING'
   AND host_song_id IS NOT NULL AND guest_song_id IS NOT NULL
 `
@@ -44,20 +44,26 @@ func (q *Queries) AdvanceBattle(ctx context.Context, arg AdvanceBattleParams) (i
 }
 
 const createBattle = `-- name: CreateBattle :one
-INSERT INTO battles (host_id, invite_code, round_count)
-VALUES ($1, $2, $3)
+INSERT INTO battles (host_id, invite_code, round_count, guess_seconds)
+VALUES ($1::uuid, $2::text, $3::integer, $4::integer)
 ON CONFLICT (invite_code) DO NOTHING
 RETURNING id
 `
 
 type CreateBattleParams struct {
-	HostID     pgtype.UUID
-	InviteCode string
-	RoundCount int32
+	HostID       pgtype.UUID
+	InviteCode   string
+	RoundCount   int32
+	GuessSeconds pgtype.Int4
 }
 
 func (q *Queries) CreateBattle(ctx context.Context, arg CreateBattleParams) (pgtype.UUID, error) {
-	row := q.db.QueryRow(ctx, createBattle, arg.HostID, arg.InviteCode, arg.RoundCount)
+	row := q.db.QueryRow(ctx, createBattle,
+		arg.HostID,
+		arg.InviteCode,
+		arg.RoundCount,
+		arg.GuessSeconds,
+	)
 	var id pgtype.UUID
 	err := row.Scan(&id)
 	return id, err
@@ -138,7 +144,7 @@ func (q *Queries) GetBattleByInvite(ctx context.Context, inviteCode string) (pgt
 }
 
 const getBattleForParticipant = `-- name: GetBattleForParticipant :one
-SELECT id, host_id, guest_id, invite_code, status, round_count, current_round, winner_id, created_at, last_activity_at, end_reason FROM battles
+SELECT id, host_id, guest_id, invite_code, status, round_count, current_round, winner_id, created_at, last_activity_at, end_reason, guess_seconds FROM battles
 WHERE id = $1::uuid
   AND (host_id = $2::uuid OR guest_id = $2::uuid)
 `
@@ -163,6 +169,7 @@ func (q *Queries) GetBattleForParticipant(ctx context.Context, arg GetBattleForP
 		&i.CreatedAt,
 		&i.LastActivityAt,
 		&i.EndReason,
+		&i.GuessSeconds,
 	)
 	return i, err
 }
@@ -234,6 +241,48 @@ func (q *Queries) GetLineupSongs(ctx context.Context, songIds []pgtype.UUID) ([]
 	return items, nil
 }
 
+const getPlayerStats = `-- name: GetPlayerStats :one
+WITH finished AS (
+    SELECT b.winner_id,
+        coalesce(sum(CASE WHEN b.host_id = $1::uuid THEN r.host_points ELSE r.guest_points END), 0) AS score
+    FROM battles b
+    LEFT JOIN rounds r ON r.battle_id = b.id
+    WHERE b.status = 'FINISHED'
+      AND (b.host_id = $1::uuid OR b.guest_id = $1::uuid)
+    GROUP BY b.id
+)
+SELECT count(*)::integer AS played,
+    count(*) FILTER (WHERE winner_id = $1::uuid)::integer AS wins,
+    count(*) FILTER (WHERE winner_id <> $1::uuid)::integer AS losses,
+    count(*) FILTER (WHERE winner_id IS NULL)::integer AS draws,
+    coalesce(max(score), 0)::integer AS best_score,
+    coalesce(round(avg(score)), 0)::integer AS average_score
+FROM finished
+`
+
+type GetPlayerStatsRow struct {
+	Played       int32
+	Wins         int32
+	Losses       int32
+	Draws        int32
+	BestScore    int32
+	AverageScore int32
+}
+
+func (q *Queries) GetPlayerStats(ctx context.Context, userID pgtype.UUID) (GetPlayerStatsRow, error) {
+	row := q.db.QueryRow(ctx, getPlayerStats, userID)
+	var i GetPlayerStatsRow
+	err := row.Scan(
+		&i.Played,
+		&i.Wins,
+		&i.Losses,
+		&i.Draws,
+		&i.BestScore,
+		&i.AverageScore,
+	)
+	return i, err
+}
+
 const joinBattle = `-- name: JoinBattle :one
 UPDATE battles
 SET guest_id = $1::uuid, status = 'SELECTING', last_activity_at = now()
@@ -260,7 +309,7 @@ func (q *Queries) JoinBattle(ctx context.Context, arg JoinBattleParams) (JoinBat
 }
 
 const listBattleRounds = `-- name: ListBattleRounds :many
-SELECT r.id, r.battle_id, r.round_number, r.host_song_id, r.guest_song_id, r.host_stage, r.guest_stage, r.host_points, r.guest_points, r.host_finished, r.guest_finished, r.status, (SELECT count(*) FROM guesses g
+SELECT r.id, r.battle_id, r.round_number, r.host_song_id, r.guest_song_id, r.host_stage, r.guest_stage, r.host_points, r.guest_points, r.host_finished, r.guest_finished, r.status, r.host_stage_started_at, r.guest_stage_started_at, (SELECT count(*) FROM guesses g
     WHERE g.round_id = r.id AND g.user_id = $1::uuid)::integer AS my_attempts
 FROM rounds r WHERE r.battle_id = $2::uuid
 ORDER BY r.round_number
@@ -272,19 +321,21 @@ type ListBattleRoundsParams struct {
 }
 
 type ListBattleRoundsRow struct {
-	ID            pgtype.UUID
-	BattleID      pgtype.UUID
-	RoundNumber   int32
-	HostSongID    pgtype.UUID
-	GuestSongID   pgtype.UUID
-	HostStage     string
-	GuestStage    string
-	HostPoints    int32
-	GuestPoints   int32
-	HostFinished  bool
-	GuestFinished bool
-	Status        string
-	MyAttempts    int32
+	ID                  pgtype.UUID
+	BattleID            pgtype.UUID
+	RoundNumber         int32
+	HostSongID          pgtype.UUID
+	GuestSongID         pgtype.UUID
+	HostStage           string
+	GuestStage          string
+	HostPoints          int32
+	GuestPoints         int32
+	HostFinished        bool
+	GuestFinished       bool
+	Status              string
+	HostStageStartedAt  pgtype.Timestamptz
+	GuestStageStartedAt pgtype.Timestamptz
+	MyAttempts          int32
 }
 
 func (q *Queries) ListBattleRounds(ctx context.Context, arg ListBattleRoundsParams) ([]ListBattleRoundsRow, error) {
@@ -309,6 +360,8 @@ func (q *Queries) ListBattleRounds(ctx context.Context, arg ListBattleRoundsPara
 			&i.HostFinished,
 			&i.GuestFinished,
 			&i.Status,
+			&i.HostStageStartedAt,
+			&i.GuestStageStartedAt,
 			&i.MyAttempts,
 		); err != nil {
 			return nil, err
@@ -437,7 +490,7 @@ func (q *Queries) ListFinishedRoundSongs(ctx context.Context, battleID pgtype.UU
 }
 
 const lockBattleForParticipant = `-- name: LockBattleForParticipant :one
-SELECT id, host_id, guest_id, invite_code, status, round_count, current_round, winner_id, created_at, last_activity_at, end_reason FROM battles
+SELECT id, host_id, guest_id, invite_code, status, round_count, current_round, winner_id, created_at, last_activity_at, end_reason, guess_seconds FROM battles
 WHERE id = $1::uuid
   AND (host_id = $2::uuid OR guest_id = $2::uuid)
 FOR UPDATE
@@ -463,12 +516,61 @@ func (q *Queries) LockBattleForParticipant(ctx context.Context, arg LockBattleFo
 		&i.CreatedAt,
 		&i.LastActivityAt,
 		&i.EndReason,
+		&i.GuessSeconds,
+	)
+	return i, err
+}
+
+const lockNextExpiredStage = `-- name: LockNextExpiredStage :one
+SELECT b.id, b.host_id, b.guest_id, b.invite_code, b.status, b.round_count, b.current_round, b.winner_id, b.created_at, b.last_activity_at, b.end_reason, b.guess_seconds, r.id AS round_id
+FROM battles b
+JOIN rounds r ON r.battle_id = b.id AND r.round_number = b.current_round
+WHERE b.status = 'ONGOING' AND b.guess_seconds IS NOT NULL AND r.status = 'GUESSING'
+  AND NOT b.id = ANY(coalesce($1::uuid[], '{}'))
+  AND ((NOT r.host_finished AND r.host_stage_started_at
+            + make_interval(secs => b.guess_seconds + $2::float8) <= now())
+    OR (NOT r.guest_finished AND r.guest_stage_started_at
+            + make_interval(secs => b.guess_seconds + $2::float8) <= now()))
+ORDER BY least(CASE WHEN NOT r.host_finished THEN r.host_stage_started_at END,
+    CASE WHEN NOT r.guest_finished THEN r.guest_stage_started_at END)
+    + make_interval(secs => b.guess_seconds)
+LIMIT 1
+FOR UPDATE OF b SKIP LOCKED
+`
+
+type LockNextExpiredStageParams struct {
+	SkipIds      []pgtype.UUID
+	GraceSeconds float64
+}
+
+type LockNextExpiredStageRow struct {
+	Battle  Battle
+	RoundID pgtype.UUID
+}
+
+func (q *Queries) LockNextExpiredStage(ctx context.Context, arg LockNextExpiredStageParams) (LockNextExpiredStageRow, error) {
+	row := q.db.QueryRow(ctx, lockNextExpiredStage, arg.SkipIds, arg.GraceSeconds)
+	var i LockNextExpiredStageRow
+	err := row.Scan(
+		&i.Battle.ID,
+		&i.Battle.HostID,
+		&i.Battle.GuestID,
+		&i.Battle.InviteCode,
+		&i.Battle.Status,
+		&i.Battle.RoundCount,
+		&i.Battle.CurrentRound,
+		&i.Battle.WinnerID,
+		&i.Battle.CreatedAt,
+		&i.Battle.LastActivityAt,
+		&i.Battle.EndReason,
+		&i.Battle.GuessSeconds,
+		&i.RoundID,
 	)
 	return i, err
 }
 
 const lockNextInactiveBattle = `-- name: LockNextInactiveBattle :one
-SELECT id, host_id, guest_id, invite_code, status, round_count, current_round, winner_id, created_at, last_activity_at, end_reason FROM battles
+SELECT id, host_id, guest_id, invite_code, status, round_count, current_round, winner_id, created_at, last_activity_at, end_reason, guess_seconds FROM battles
 WHERE (status = 'PENDING'
         AND last_activity_at < now() - make_interval(secs => $1::float8))
    OR (status IN ('SELECTING', 'ONGOING')
@@ -498,6 +600,7 @@ func (q *Queries) LockNextInactiveBattle(ctx context.Context, arg LockNextInacti
 		&i.CreatedAt,
 		&i.LastActivityAt,
 		&i.EndReason,
+		&i.GuessSeconds,
 	)
 	return i, err
 }

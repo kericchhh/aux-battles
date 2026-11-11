@@ -36,8 +36,8 @@ If `goose` is not found after installation, add `$(go env GOPATH)/bin` to your
 
 Both processes store media in `./storage` by default; set the same
 `MEDIA_ROOT` for both to use another directory. See the
-[worker guide](worker.md) for how songs are processed and the worker's
-settings, and the [API guide](api.md) for routes and examples.
+[worker guide](worker.md) for how songs are processed and how long each
+attempt may take, and the [API guide](api.md) for routes and examples.
 
 ## API settings
 
@@ -50,7 +50,11 @@ in-flight requests up to eight seconds to finish, then closes any remaining
 connections, interrupting slow uploads or downloads. A second signal exits
 immediately. Requests must arrive within 30 seconds and responses within
 60 seconds, except song uploads and audio downloads, which may take up to five
-minutes.
+minutes, and live update streams, which stay open for up to 30 minutes and
+close at once on shutdown.
+
+The API keeps one database connection open for live updates, outside the
+regular pool, and reconnects it automatically.
 
 ## Tests
 
