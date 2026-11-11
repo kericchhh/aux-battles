@@ -45,18 +45,14 @@ func (l *Lobby) Forfeit(ctx context.Context, userID, battleID pgtype.UUID) (View
 	if err := endBattle(ctx, q, end); err != nil {
 		return View{}, err
 	}
-	b, err = q.GetBattleForParticipant(ctx, dbgen.GetBattleForParticipantParams{ID: battleID, UserID: userID})
+	view, err := loadView(ctx, q, userID, battleID)
 	if err != nil {
 		return View{}, fmt.Errorf("read forfeited battle: %w", err)
-	}
-	rounds, err := q.ListBattleRounds(ctx, dbgen.ListBattleRoundsParams{BattleID: battleID, UserID: userID})
-	if err != nil {
-		return View{}, fmt.Errorf("read forfeited battle rounds: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return View{}, fmt.Errorf("commit forfeit: %w", err)
 	}
-	return participantView(b, rounds, userID), nil
+	return view, nil
 }
 
 func (l *Lobby) ExpireInactive(ctx context.Context) (int, error) {

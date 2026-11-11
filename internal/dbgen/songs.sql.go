@@ -115,20 +115,38 @@ func (q *Queries) GetSongStatus(ctx context.Context, dollar_1 pgtype.UUID) (GetS
 }
 
 const listSongs = `-- name: ListSongs :many
-SELECT id::text AS id, title, artist
+SELECT id, title, artist, created_at
 FROM songs
 WHERE status = 'READY'
-ORDER BY created_at DESC
+  AND ($1::text IS NULL
+    OR title ILIKE $1::text OR artist ILIKE $1::text)
+  AND (created_at, id) < (coalesce($2::timestamptz, 'infinity'),
+    coalesce($3::uuid, '00000000-0000-0000-0000-000000000000'))
+ORDER BY created_at DESC, id DESC
+LIMIT $4::integer
 `
 
-type ListSongsRow struct {
-	ID     string
-	Title  string
-	Artist string
+type ListSongsParams struct {
+	Pattern         pgtype.Text
+	BeforeCreatedAt pgtype.Timestamptz
+	BeforeID        pgtype.UUID
+	MaxSongs        int32
 }
 
-func (q *Queries) ListSongs(ctx context.Context) ([]ListSongsRow, error) {
-	rows, err := q.db.Query(ctx, listSongs)
+type ListSongsRow struct {
+	ID        pgtype.UUID
+	Title     string
+	Artist    string
+	CreatedAt pgtype.Timestamptz
+}
+
+func (q *Queries) ListSongs(ctx context.Context, arg ListSongsParams) ([]ListSongsRow, error) {
+	rows, err := q.db.Query(ctx, listSongs,
+		arg.Pattern,
+		arg.BeforeCreatedAt,
+		arg.BeforeID,
+		arg.MaxSongs,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +154,12 @@ func (q *Queries) ListSongs(ctx context.Context) ([]ListSongsRow, error) {
 	var items []ListSongsRow
 	for rows.Next() {
 		var i ListSongsRow
-		if err := rows.Scan(&i.ID, &i.Title, &i.Artist); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Artist,
+			&i.CreatedAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

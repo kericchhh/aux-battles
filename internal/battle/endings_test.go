@@ -63,11 +63,11 @@ func TestParticipantViewReportsEndReason(t *testing.T) {
 		t.Fatal(err)
 	}
 	b := dbgen.Battle{ID: host, HostID: host, RoundCount: 1, CurrentRound: 1, Status: "ONGOING"}
-	if view := participantView(b, nil, host); view.EndReason != nil || view.Outcome != nil {
+	if view := participantView(b, dbgen.GetBattlePlayersRow{}, nil, nil, host); view.EndReason != nil || view.Outcome != nil {
 		t.Fatalf("running battle view=%+v", view)
 	}
 	b.Status, b.EndReason = "CANCELLED", pgtype.Text{String: "TIMEOUT", Valid: true}
-	view := participantView(b, nil, host)
+	view := participantView(b, dbgen.GetBattlePlayersRow{}, nil, nil, host)
 	if view.EndReason == nil || *view.EndReason != "TIMEOUT" || view.Outcome != nil {
 		t.Fatalf("cancelled battle view=%+v", view)
 	}

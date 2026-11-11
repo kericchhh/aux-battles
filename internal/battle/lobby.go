@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -107,6 +108,8 @@ type View struct {
 	InviteCode           string        `json:"inviteCode"`
 	CurrentRound         int32         `json:"currentRound"`
 	Rounds               int32         `json:"rounds"`
+	Me                   Player        `json:"me"`
+	Opponent             *Player       `json:"opponent"`
 	OpponentJoined       bool          `json:"opponentJoined"`
 	MyLineupLocked       bool          `json:"myLineupLocked"`
 	OpponentLineupLocked bool          `json:"opponentLineupLocked"`
@@ -115,7 +118,11 @@ type View struct {
 	MyScore              int32         `json:"myScore"`
 	OpponentScore        int32         `json:"opponentScore"`
 	Round                *RoundView    `json:"round"`
-	PreviousRound        *RoundSummary `json:"previousRound"`
+	CompletedRounds      []RoundResult `json:"completedRounds"`
+}
+
+type Player struct {
+	Username string `json:"username"`
 }
 
 type RoundView struct {
@@ -129,10 +136,17 @@ type RoundView struct {
 	MyAttempts       int32  `json:"myAttempts"`
 }
 
-type RoundSummary struct {
+type RoundResult struct {
 	Number         int32 `json:"number"`
 	MyPoints       int32 `json:"myPoints"`
 	OpponentPoints int32 `json:"opponentPoints"`
+	MySong         Song  `json:"mySong"`
+	OpponentSong   Song  `json:"opponentSong"`
+}
+
+type Song struct {
+	Title  string `json:"title"`
+	Artist string `json:"artist"`
 }
 
 func (l *Lobby) Get(ctx context.Context, userID, id pgtype.UUID) (View, error) {
@@ -141,7 +155,17 @@ func (l *Lobby) Get(ctx context.Context, userID, id pgtype.UUID) (View, error) {
 		return View{}, fmt.Errorf("begin battle view: %w", err)
 	}
 	defer tx.Rollback(ctx)
-	q := dbgen.New(tx)
+	view, err := loadView(ctx, dbgen.New(tx), userID, id)
+	if err != nil {
+		return View{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return View{}, fmt.Errorf("finish battle view: %w", err)
+	}
+	return view, nil
+}
+
+func loadView(ctx context.Context, q *dbgen.Queries, userID, id pgtype.UUID) (View, error) {
 	b, err := q.GetBattleForParticipant(ctx, dbgen.GetBattleForParticipantParams{ID: id, UserID: userID})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return View{}, ErrNotFound
@@ -149,21 +173,38 @@ func (l *Lobby) Get(ctx context.Context, userID, id pgtype.UUID) (View, error) {
 	if err != nil {
 		return View{}, fmt.Errorf("read battle: %w", err)
 	}
+	players, err := q.GetBattlePlayers(ctx, id)
+	if err != nil {
+		return View{}, fmt.Errorf("read battle players: %w", err)
+	}
 	rounds, err := q.ListBattleRounds(ctx, dbgen.ListBattleRoundsParams{BattleID: id, UserID: userID})
 	if err != nil {
 		return View{}, fmt.Errorf("read battle rounds: %w", err)
 	}
-	view := participantView(b, rounds, userID)
-	if err := tx.Commit(ctx); err != nil {
-		return View{}, fmt.Errorf("finish battle view: %w", err)
+	songs, err := q.ListFinishedRoundSongs(ctx, id)
+	if err != nil {
+		return View{}, fmt.Errorf("read finished round songs: %w", err)
 	}
-	return view, nil
+	return participantView(b, players, rounds, songs, userID), nil
 }
 
-func participantView(b dbgen.Battle, rounds []dbgen.ListBattleRoundsRow, userID pgtype.UUID) View {
+func participantView(b dbgen.Battle, players dbgen.GetBattlePlayersRow, rounds []dbgen.ListBattleRoundsRow, songs []dbgen.ListFinishedRoundSongsRow, userID pgtype.UUID) View {
 	isHost := b.HostID == userID
 	v := View{ID: b.ID.String(), Status: b.Status, InviteCode: b.InviteCode, CurrentRound: b.CurrentRound, Rounds: b.RoundCount,
-		OpponentJoined: b.GuestID.Valid, MyLineupLocked: len(rounds) == int(b.RoundCount), OpponentLineupLocked: len(rounds) == int(b.RoundCount)}
+		Me: Player{Username: players.HostUsername}, OpponentJoined: b.GuestID.Valid,
+		MyLineupLocked: len(rounds) == int(b.RoundCount), OpponentLineupLocked: len(rounds) == int(b.RoundCount),
+		CompletedRounds: make([]RoundResult, 0, len(songs))}
+	if players.GuestUsername.Valid {
+		v.Opponent = &Player{Username: players.GuestUsername.String}
+	}
+	if !isHost {
+		v.Me = Player{Username: players.GuestUsername.String}
+		v.Opponent = &Player{Username: players.HostUsername}
+	}
+	revealed := make(map[int32]dbgen.ListFinishedRoundSongsRow, len(songs))
+	for _, s := range songs {
+		revealed[s.RoundNumber] = s
+	}
 	for _, r := range rounds {
 		mySong, opponentSong := r.HostSongID, r.GuestSongID
 		myPoints, opponentPoints := r.HostPoints, r.GuestPoints
@@ -175,27 +216,80 @@ func participantView(b dbgen.Battle, rounds []dbgen.ListBattleRoundsRow, userID 
 		}
 		v.MyLineupLocked = v.MyLineupLocked && mySong.Valid
 		v.OpponentLineupLocked = v.OpponentLineupLocked && opponentSong.Valid
-		v.MyScore += myPoints
-		v.OpponentScore += opponentPoints
+		if r.Status == "FINISHED" || b.Status != "ONGOING" {
+			v.MyScore += myPoints
+			v.OpponentScore += opponentPoints
+		}
 		if b.Status == "ONGOING" && r.RoundNumber == b.CurrentRound {
 			v.Round = &RoundView{ID: r.ID.String(), Number: r.RoundNumber, Status: r.Status, MyStage: myStage, MyPoints: myPoints, MyFinished: myFinished, OpponentFinished: opponentFinished, MyAttempts: r.MyAttempts}
 		}
-		if r.Status == "FINISHED" {
-			v.PreviousRound = &RoundSummary{Number: r.RoundNumber, MyPoints: myPoints, OpponentPoints: opponentPoints}
-		}
-	}
-	if b.Status == "FINISHED" {
-		result := "DRAW"
-		if b.WinnerID.Valid {
-			result = "LOSS"
-			if b.WinnerID == userID {
-				result = "WIN"
+		if s, ok := revealed[r.RoundNumber]; ok && r.Status == "FINISHED" {
+			result := RoundResult{Number: r.RoundNumber, MyPoints: myPoints, OpponentPoints: opponentPoints,
+				MySong:       Song{Title: s.HostSongTitle, Artist: s.HostSongArtist},
+				OpponentSong: Song{Title: s.GuestSongTitle, Artist: s.GuestSongArtist}}
+			if !isHost {
+				result.MySong, result.OpponentSong = result.OpponentSong, result.MySong
 			}
+			v.CompletedRounds = append(v.CompletedRounds, result)
 		}
-		v.Outcome = &result
 	}
+	v.Outcome = outcome(b.Status, b.WinnerID, userID)
 	if b.EndReason.Valid {
 		v.EndReason = &b.EndReason.String
 	}
 	return v
+}
+
+func outcome(status string, winnerID, userID pgtype.UUID) *string {
+	if status != "FINISHED" {
+		return nil
+	}
+	result := "DRAW"
+	if winnerID.Valid {
+		result = "LOSS"
+		if winnerID == userID {
+			result = "WIN"
+		}
+	}
+	return &result
+}
+
+const maxListedBattles = 20
+
+type Summary struct {
+	ID             string    `json:"id"`
+	Status         string    `json:"status"`
+	Rounds         int32     `json:"rounds"`
+	CurrentRound   int32     `json:"currentRound"`
+	Opponent       *Player   `json:"opponent"`
+	InviteCode     *string   `json:"inviteCode"`
+	MyScore        int32     `json:"myScore"`
+	OpponentScore  int32     `json:"opponentScore"`
+	Outcome        *string   `json:"outcome"`
+	EndReason      *string   `json:"endReason"`
+	LastActivityAt time.Time `json:"lastActivityAt"`
+}
+
+func (l *Lobby) List(ctx context.Context, userID pgtype.UUID) ([]Summary, error) {
+	rows, err := dbgen.New(l.pool).ListBattlesForUser(ctx, dbgen.ListBattlesForUserParams{UserID: userID, MaxBattles: maxListedBattles})
+	if err != nil {
+		return nil, fmt.Errorf("list battles: %w", err)
+	}
+	battles := make([]Summary, 0, len(rows))
+	for _, r := range rows {
+		s := Summary{ID: r.ID.String(), Status: r.Status, Rounds: r.RoundCount, CurrentRound: r.CurrentRound,
+			MyScore: r.MyScore, OpponentScore: r.OpponentScore, Outcome: outcome(r.Status, r.WinnerID, userID),
+			LastActivityAt: r.LastActivityAt.Time}
+		if r.OpponentUsername.Valid {
+			s.Opponent = &Player{Username: r.OpponentUsername.String}
+		}
+		if r.Status == "PENDING" && r.HostID == userID {
+			s.InviteCode = &r.InviteCode
+		}
+		if r.EndReason.Valid {
+			s.EndReason = &r.EndReason.String
+		}
+		battles = append(battles, s)
+	}
+	return battles, nil
 }

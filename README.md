@@ -46,7 +46,11 @@ local database outage drill.
 
 Run `go test ./...` for the Go tests that do not require PostgreSQL. See the
 [development guide](docs/development.md) for running the API and worker on your
-host and setting up the PostgreSQL integration tests.
+host and setting up the PostgreSQL integration tests. The
+[API guide](docs/api.md) covers routes and gameplay, the
+[worker guide](docs/worker.md) covers song processing, and the
+[migration notes](docs/migrations.md) cover applying and rolling back schema
+changes.
 
 ## CI
 

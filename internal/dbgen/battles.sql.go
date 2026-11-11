@@ -167,6 +167,26 @@ func (q *Queries) GetBattleForParticipant(ctx context.Context, arg GetBattleForP
 	return i, err
 }
 
+const getBattlePlayers = `-- name: GetBattlePlayers :one
+SELECT h.username AS host_username, g.username AS guest_username
+FROM battles b
+JOIN users h ON h.id = b.host_id
+LEFT JOIN users g ON g.id = b.guest_id
+WHERE b.id = $1
+`
+
+type GetBattlePlayersRow struct {
+	HostUsername  string
+	GuestUsername pgtype.Text
+}
+
+func (q *Queries) GetBattlePlayers(ctx context.Context, id pgtype.UUID) (GetBattlePlayersRow, error) {
+	row := q.db.QueryRow(ctx, getBattlePlayers, id)
+	var i GetBattlePlayersRow
+	err := row.Scan(&i.HostUsername, &i.GuestUsername)
+	return i, err
+}
+
 const getLineupSongs = `-- name: GetLineupSongs :many
 SELECT id, title, status, full_song_path, drums_path, bass_path, melody_path, vocals_path
 FROM songs WHERE id = ANY($1::uuid[])
@@ -290,6 +310,121 @@ func (q *Queries) ListBattleRounds(ctx context.Context, arg ListBattleRoundsPara
 			&i.GuestFinished,
 			&i.Status,
 			&i.MyAttempts,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listBattlesForUser = `-- name: ListBattlesForUser :many
+SELECT b.id, b.status, b.round_count, b.current_round, b.invite_code, b.host_id,
+    b.winner_id, b.end_reason, b.last_activity_at,
+    o.username AS opponent_username,
+    coalesce(sum(CASE WHEN b.host_id = $1::uuid THEN r.host_points ELSE r.guest_points END)
+        FILTER (WHERE r.status = 'FINISHED' OR b.status <> 'ONGOING'), 0)::integer AS my_score,
+    coalesce(sum(CASE WHEN b.host_id = $1::uuid THEN r.guest_points ELSE r.host_points END)
+        FILTER (WHERE r.status = 'FINISHED' OR b.status <> 'ONGOING'), 0)::integer AS opponent_score
+FROM battles b
+LEFT JOIN users o ON o.id = CASE WHEN b.host_id = $1::uuid THEN b.guest_id ELSE b.host_id END
+LEFT JOIN rounds r ON r.battle_id = b.id
+WHERE b.host_id = $1::uuid OR b.guest_id = $1::uuid
+GROUP BY b.id, o.username
+ORDER BY b.status IN ('PENDING', 'SELECTING', 'ONGOING') DESC, b.last_activity_at DESC, b.id
+LIMIT $2::integer
+`
+
+type ListBattlesForUserParams struct {
+	UserID     pgtype.UUID
+	MaxBattles int32
+}
+
+type ListBattlesForUserRow struct {
+	ID               pgtype.UUID
+	Status           string
+	RoundCount       int32
+	CurrentRound     int32
+	InviteCode       string
+	HostID           pgtype.UUID
+	WinnerID         pgtype.UUID
+	EndReason        pgtype.Text
+	LastActivityAt   pgtype.Timestamptz
+	OpponentUsername pgtype.Text
+	MyScore          int32
+	OpponentScore    int32
+}
+
+func (q *Queries) ListBattlesForUser(ctx context.Context, arg ListBattlesForUserParams) ([]ListBattlesForUserRow, error) {
+	rows, err := q.db.Query(ctx, listBattlesForUser, arg.UserID, arg.MaxBattles)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListBattlesForUserRow
+	for rows.Next() {
+		var i ListBattlesForUserRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Status,
+			&i.RoundCount,
+			&i.CurrentRound,
+			&i.InviteCode,
+			&i.HostID,
+			&i.WinnerID,
+			&i.EndReason,
+			&i.LastActivityAt,
+			&i.OpponentUsername,
+			&i.MyScore,
+			&i.OpponentScore,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFinishedRoundSongs = `-- name: ListFinishedRoundSongs :many
+SELECT r.round_number,
+    hs.title AS host_song_title, hs.artist AS host_song_artist,
+    gs.title AS guest_song_title, gs.artist AS guest_song_artist
+FROM rounds r
+JOIN songs hs ON hs.id = r.host_song_id
+JOIN songs gs ON gs.id = r.guest_song_id
+WHERE r.battle_id = $1 AND r.status = 'FINISHED'
+ORDER BY r.round_number
+`
+
+type ListFinishedRoundSongsRow struct {
+	RoundNumber     int32
+	HostSongTitle   string
+	HostSongArtist  string
+	GuestSongTitle  string
+	GuestSongArtist string
+}
+
+func (q *Queries) ListFinishedRoundSongs(ctx context.Context, battleID pgtype.UUID) ([]ListFinishedRoundSongsRow, error) {
+	rows, err := q.db.Query(ctx, listFinishedRoundSongs, battleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListFinishedRoundSongsRow
+	for rows.Next() {
+		var i ListFinishedRoundSongsRow
+		if err := rows.Scan(
+			&i.RoundNumber,
+			&i.HostSongTitle,
+			&i.HostSongArtist,
+			&i.GuestSongTitle,
+			&i.GuestSongArtist,
 		); err != nil {
 			return nil, err
 		}

@@ -1,13 +1,20 @@
 package server
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/kericchhh/aux-battles/internal/dbgen"
 )
 
 type songResponse struct {
@@ -16,25 +23,101 @@ type songResponse struct {
 	Artist string `json:"artist"`
 }
 
+const (
+	defaultSongPage = 50
+	maxSongPage     = 100
+	maxSongQuery    = 100
+)
+
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
+type songPage struct {
+	Songs      []songResponse `json:"songs"`
+	NextCursor *string        `json:"nextCursor"`
+}
+
 func (s *server) listSongs(w http.ResponseWriter, r *http.Request) {
-	rows, err := s.queries.ListSongs(r.Context())
+	params, err := songListParams(r.URL.Query())
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	limit := params.MaxSongs
+	params.MaxSongs++
+	rows, err := s.queries.ListSongs(r.Context(), params)
 	if err != nil {
 		s.loggerFor(r.Context()).Error("list songs failed", "error", err)
 		writeJSONError(w, http.StatusInternalServerError, "database error")
 		return
 	}
 
-	songs := make([]songResponse, 0, len(rows))
-	for _, row := range rows {
-		songs = append(songs, songResponse{
-			ID: row.ID, Title: row.Title, Artist: row.Artist,
-		})
+	page := songPage{Songs: make([]songResponse, 0, min(len(rows), int(limit)))}
+	for i, row := range rows {
+		if i == int(limit) {
+			cursor := encodeSongCursor(rows[i-1].CreatedAt.Time, rows[i-1].ID)
+			page.NextCursor = &cursor
+			break
+		}
+		page.Songs = append(page.Songs, songResponse{ID: row.ID.String(), Title: row.Title, Artist: row.Artist})
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(songs); err != nil {
+	if err := json.NewEncoder(w).Encode(page); err != nil {
 		s.loggerFor(r.Context()).Error("write songs response failed", "error", err)
 	}
+}
+
+func songListParams(values url.Values) (dbgen.ListSongsParams, error) {
+	params := dbgen.ListSongsParams{MaxSongs: defaultSongPage}
+	if q := strings.TrimSpace(values.Get("q")); q != "" {
+		if !utf8.ValidString(q) || strings.ContainsRune(q, 0) {
+			return params, errors.New("search contains invalid characters")
+		}
+		if utf8.RuneCountInString(q) > maxSongQuery {
+			return params, fmt.Errorf("search must be at most %d characters", maxSongQuery)
+		}
+		params.Pattern = pgtype.Text{String: "%" + likeEscaper.Replace(q) + "%", Valid: true}
+	}
+	if raw := values.Get("limit"); raw != "" {
+		limit, err := strconv.Atoi(raw)
+		if err != nil || limit < 1 || limit > maxSongPage {
+			return params, fmt.Errorf("limit must be between 1 and %d", maxSongPage)
+		}
+		params.MaxSongs = int32(limit)
+	}
+	if raw := values.Get("cursor"); raw != "" {
+		createdAt, id, err := decodeSongCursor(raw)
+		if err != nil {
+			return params, errors.New("invalid cursor")
+		}
+		params.BeforeCreatedAt = pgtype.Timestamptz{Time: createdAt, Valid: true}
+		params.BeforeID = id
+	}
+	return params, nil
+}
+
+func encodeSongCursor(createdAt time.Time, id pgtype.UUID) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(createdAt.UTC().Format(time.RFC3339Nano) + " " + id.String()))
+}
+
+func decodeSongCursor(raw string) (time.Time, pgtype.UUID, error) {
+	var id pgtype.UUID
+	decoded, err := base64.RawURLEncoding.DecodeString(raw)
+	if err != nil {
+		return time.Time{}, id, err
+	}
+	stamp, rawID, ok := strings.Cut(string(decoded), " ")
+	if !ok {
+		return time.Time{}, id, errors.New("malformed cursor")
+	}
+	createdAt, err := time.Parse(time.RFC3339Nano, stamp)
+	if err != nil {
+		return time.Time{}, id, err
+	}
+	if err := id.Scan(rawID); err != nil {
+		return time.Time{}, id, err
+	}
+	return createdAt, id, nil
 }
 
 func (s *server) getSong(w http.ResponseWriter, r *http.Request) {

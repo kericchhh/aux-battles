@@ -36,13 +36,25 @@ func TestParticipantViewUsesPlayerPerspective(t *testing.T) {
 		t.Fatal(err)
 	}
 	b := dbgen.Battle{ID: host, HostID: host, GuestID: guest, RoundCount: 1, CurrentRound: 1, Status: "ONGOING"}
+	players := dbgen.GetBattlePlayersRow{HostUsername: "hana", GuestUsername: pgtype.Text{String: "gus", Valid: true}}
 	rows := []dbgen.ListBattleRoundsRow{{ID: song, RoundNumber: 1, HostSongID: song, GuestSongID: song, HostPoints: 100, GuestPoints: 50, HostStage: "DRUM", GuestStage: "MELODY", HostFinished: true, GuestFinished: false, Status: "GUESSING", MyAttempts: 3}}
-	view := participantView(b, rows, guest)
-	if view.MyScore != 50 || view.OpponentScore != 100 || !view.MyLineupLocked || !view.OpponentLineupLocked || view.Round == nil {
+	songs := []dbgen.ListFinishedRoundSongsRow{{RoundNumber: 1, HostSongTitle: "Host pick", HostSongArtist: "H", GuestSongTitle: "Guest pick", GuestSongArtist: "G"}}
+	view := participantView(b, players, rows, songs, guest)
+	if view.MyScore != 0 || view.OpponentScore != 0 || !view.MyLineupLocked || !view.OpponentLineupLocked || view.Round == nil {
 		t.Fatalf("guest view=%+v", view)
+	}
+	b.Status = "CANCELLED"
+	if ended := participantView(b, players, rows, songs, guest); ended.MyScore != 50 || ended.OpponentScore != 100 {
+		t.Fatalf("ended guest view=%+v", ended)
+	}
+	if view.Me.Username != "gus" || view.Opponent == nil || view.Opponent.Username != "hana" {
+		t.Fatalf("guest players me=%+v opponent=%+v", view.Me, view.Opponent)
 	}
 	if view.Round.MyStage != "MELODY" || view.Round.MyFinished || !view.Round.OpponentFinished || view.Round.MyAttempts != 3 {
 		t.Fatalf("guest round=%+v", view.Round)
+	}
+	if len(view.CompletedRounds) != 0 {
+		t.Fatalf("unfinished round revealed=%+v", view.CompletedRounds)
 	}
 	b.Status = "FINISHED"
 	rows[0].Status = "FINISHED"
@@ -51,9 +63,29 @@ func TestParticipantViewUsesPlayerPerspective(t *testing.T) {
 		want   string
 	}{{host, "LOSS"}, {guest, "WIN"}, {pgtype.UUID{}, "DRAW"}} {
 		b.WinnerID = tc.winner
-		view = participantView(b, rows, guest)
-		if view.Outcome == nil || *view.Outcome != tc.want || view.Round != nil || view.PreviousRound == nil || view.PreviousRound.MyPoints != 50 {
+		view = participantView(b, players, rows, songs, guest)
+		if view.Outcome == nil || *view.Outcome != tc.want || view.Round != nil || len(view.CompletedRounds) != 1 {
 			t.Fatalf("finished guest view=%+v", view)
 		}
+	}
+	want := RoundResult{Number: 1, MyPoints: 50, OpponentPoints: 100, MySong: Song{Title: "Guest pick", Artist: "G"}, OpponentSong: Song{Title: "Host pick", Artist: "H"}}
+	if view.CompletedRounds[0] != want {
+		t.Fatalf("guest result=%+v, want %+v", view.CompletedRounds[0], want)
+	}
+	hostView := participantView(b, players, rows, songs, host)
+	if hostView.Me.Username != "hana" || hostView.Opponent.Username != "gus" || hostView.CompletedRounds[0].MySong.Title != "Host pick" || hostView.CompletedRounds[0].OpponentSong.Title != "Guest pick" {
+		t.Fatalf("host view me=%+v opponent=%+v results=%+v", hostView.Me, hostView.Opponent, hostView.CompletedRounds)
+	}
+}
+
+func TestParticipantViewBeforeOpponentJoins(t *testing.T) {
+	var host pgtype.UUID
+	if err := host.Scan("00000000-0000-4000-8000-000000000001"); err != nil {
+		t.Fatal(err)
+	}
+	b := dbgen.Battle{ID: host, HostID: host, RoundCount: 3, Status: "PENDING"}
+	view := participantView(b, dbgen.GetBattlePlayersRow{HostUsername: "hana"}, nil, nil, host)
+	if view.Me.Username != "hana" || view.Opponent != nil || view.CompletedRounds == nil {
+		t.Fatalf("pending view=%+v", view)
 	}
 }

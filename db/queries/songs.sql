@@ -1,8 +1,13 @@
 -- name: ListSongs :many
-SELECT id::text AS id, title, artist
+SELECT id, title, artist, created_at
 FROM songs
 WHERE status = 'READY'
-ORDER BY created_at DESC;
+  AND (sqlc.narg(pattern)::text IS NULL
+    OR title ILIKE sqlc.narg(pattern)::text OR artist ILIKE sqlc.narg(pattern)::text)
+  AND (created_at, id) < (coalesce(sqlc.narg(before_created_at)::timestamptz, 'infinity'),
+    coalesce(sqlc.narg(before_id)::uuid, '00000000-0000-0000-0000-000000000000'))
+ORDER BY created_at DESC, id DESC
+LIMIT sqlc.arg(max_songs)::integer;
 
 -- name: GetSong :one
 SELECT id::text AS id, title, artist

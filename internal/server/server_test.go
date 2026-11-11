@@ -250,7 +250,7 @@ func TestClientErrorsUseJSON(t *testing.T) {
 		wantText   string
 	}{
 		{"register content type", http.MethodPost, "/users", `{}`, http.StatusUnsupportedMediaType, "expected application/json"},
-		{"invalid song ID", http.MethodGet, "/songs/not-a-uuid", "", http.StatusBadRequest, "invalid song ID"},
+		{"catalog without session", http.MethodGet, "/songs/not-a-uuid", "", http.StatusUnauthorized, "not authenticated"},
 	}
 
 	for _, tt := range tests {

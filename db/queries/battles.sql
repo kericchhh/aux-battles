@@ -84,3 +84,36 @@ FOR UPDATE SKIP LOCKED;
 UPDATE battles
 SET status = sqlc.arg(status)::text, end_reason = sqlc.arg(end_reason)::text, winner_id = sqlc.narg(winner_id)::uuid
 WHERE id = sqlc.arg(id)::uuid AND status IN ('PENDING', 'SELECTING', 'ONGOING');
+
+-- name: GetBattlePlayers :one
+SELECT h.username AS host_username, g.username AS guest_username
+FROM battles b
+JOIN users h ON h.id = b.host_id
+LEFT JOIN users g ON g.id = b.guest_id
+WHERE b.id = $1;
+
+-- name: ListFinishedRoundSongs :many
+SELECT r.round_number,
+    hs.title AS host_song_title, hs.artist AS host_song_artist,
+    gs.title AS guest_song_title, gs.artist AS guest_song_artist
+FROM rounds r
+JOIN songs hs ON hs.id = r.host_song_id
+JOIN songs gs ON gs.id = r.guest_song_id
+WHERE r.battle_id = $1 AND r.status = 'FINISHED'
+ORDER BY r.round_number;
+
+-- name: ListBattlesForUser :many
+SELECT b.id, b.status, b.round_count, b.current_round, b.invite_code, b.host_id,
+    b.winner_id, b.end_reason, b.last_activity_at,
+    o.username AS opponent_username,
+    coalesce(sum(CASE WHEN b.host_id = sqlc.arg(user_id)::uuid THEN r.host_points ELSE r.guest_points END)
+        FILTER (WHERE r.status = 'FINISHED' OR b.status <> 'ONGOING'), 0)::integer AS my_score,
+    coalesce(sum(CASE WHEN b.host_id = sqlc.arg(user_id)::uuid THEN r.guest_points ELSE r.host_points END)
+        FILTER (WHERE r.status = 'FINISHED' OR b.status <> 'ONGOING'), 0)::integer AS opponent_score
+FROM battles b
+LEFT JOIN users o ON o.id = CASE WHEN b.host_id = sqlc.arg(user_id)::uuid THEN b.guest_id ELSE b.host_id END
+LEFT JOIN rounds r ON r.battle_id = b.id
+WHERE b.host_id = sqlc.arg(user_id)::uuid OR b.guest_id = sqlc.arg(user_id)::uuid
+GROUP BY b.id, o.username
+ORDER BY b.status IN ('PENDING', 'SELECTING', 'ONGOING') DESC, b.last_activity_at DESC, b.id
+LIMIT sqlc.arg(max_battles)::integer;

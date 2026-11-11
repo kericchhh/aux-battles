@@ -71,6 +71,22 @@ func (s *server) joinBattle(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *server) listBattles(w http.ResponseWriter, r *http.Request) {
+	userID, ok := s.battleActor(w, r)
+	if !ok {
+		return
+	}
+	battles, err := s.battles.List(r.Context(), userID)
+	if err != nil {
+		s.writeBattleError(w, r, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.MarshalWrite(w, battles); err != nil {
+		s.loggerFor(r.Context()).Error("write battle list", "error", err)
+	}
+}
+
 func (s *server) getBattle(w http.ResponseWriter, r *http.Request) {
 	userID, ok := s.battleActor(w, r)
 	if !ok {

@@ -52,6 +52,17 @@ func TestSongUploadQueuesJobWithPostgres(t *testing.T) {
 	request.AddCookie(cookie)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("upload by non-admin = %d %s", response.Code, response.Body.String())
+	}
+	if _, err := pool.Exec(ctx, "UPDATE users SET role = 'ADMIN' WHERE username = $1", username); err != nil {
+		t.Fatal(err)
+	}
+
+	request = multipartSongRequest(t, testMP3Bytes(t), "1")
+	request.AddCookie(cookie)
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusAccepted {
 		t.Fatalf("upload = %d %s", response.Code, response.Body.String())
 	}
@@ -80,6 +91,10 @@ func TestSongUploadQueuesJobWithPostgres(t *testing.T) {
 	}
 	if _, err := os.Stat(inputPath); err != nil {
 		t.Fatalf("queued input file is missing: %v", err)
+	}
+	status := authTestRequest(handler, http.MethodGet, "/songs/"+created.ID+"/status", "", cookie)
+	if status.Code != http.StatusOK {
+		t.Fatalf("admin status = %d %s", status.Code, status.Body.String())
 	}
 }
 

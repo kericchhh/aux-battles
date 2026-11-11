@@ -109,7 +109,7 @@ func TestLobbyConcurrentJoinAndParticipantView(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if view.Status != "SELECTING" || !view.OpponentJoined || view.MyLineupLocked || view.OpponentLineupLocked || view.MyScore != 0 || view.OpponentScore != 0 || view.Outcome != nil || view.Round != nil || view.PreviousRound != nil {
+		if view.Status != "SELECTING" || !view.OpponentJoined || view.MyLineupLocked || view.OpponentLineupLocked || view.MyScore != 0 || view.OpponentScore != 0 || view.Outcome != nil || view.Round != nil || len(view.CompletedRounds) != 0 {
 			t.Fatalf("joined view=%+v", view)
 		}
 	}
