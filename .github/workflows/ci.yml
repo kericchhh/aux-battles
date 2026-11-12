@@ -127,6 +127,7 @@ jobs:
         run: pnpm build
 
   images:
+    name: images (${{ matrix.image.name }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -151,7 +152,7 @@ jobs:
           load: true
           tags: ${{ matrix.image.name }}:scan
           cache-from: type=gha,scope=${{ matrix.image.name }}
-          cache-to: type=gha,mode=${{ matrix.image.cache }},scope=${{ matrix.image.name }}
+          cache-to: type=gha,mode=${{ matrix.image.cache }},scope=${{ matrix.image.name }},ignore-error=true
 
       - name: Scan image
         uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
@@ -163,6 +164,7 @@ jobs:
           exit-code: "1"
 
   publish:
+    name: publish (${{ matrix.image.name }})
     needs: [go, web, images]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -171,6 +173,7 @@ jobs:
       contents: read
       packages: write
     strategy:
+      fail-fast: false
       matrix:
         image:
           - { name: aux-battles-api, file: Dockerfile }
