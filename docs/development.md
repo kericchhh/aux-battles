@@ -10,7 +10,7 @@ Install the Go version listed in `go.mod`, Docker with Compose, FFmpeg, Python
 repository root:
 
 ```sh
-go install github.com/pressly/goose/v3/cmd/goose@v3.28.0
+go install github.com/pressly/goose/v3/cmd/goose@v3.30.1
 docker compose up -d --wait db
 export DATABASE_URL='postgres://aux:aux_dev@127.0.0.1:5433/aux_battles?sslmode=disable'
 "$(go env GOPATH)/bin/goose" -dir db/migrations postgres "$DATABASE_URL" up

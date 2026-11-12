@@ -1,11 +1,11 @@
 # syntax=docker/dockerfile:1
 
-FROM golang:1.27.1-bookworm AS build
+FROM golang:1.27.4-bookworm AS build
 
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
-RUN CGO_ENABLED=0 go install github.com/pressly/goose/v3/cmd/goose@v3.28.0
+RUN CGO_ENABLED=0 go install github.com/pressly/goose/v3/cmd/goose@v3.30.1
 
 COPY cmd ./cmd
 COPY internal ./internal
