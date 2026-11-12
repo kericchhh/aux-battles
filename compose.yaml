@@ -113,7 +113,7 @@ services:
       - loki_data:/loki
 
   alloy:
-    image: grafana/alloy:v1.21.2
+    image: grafana/alloy:v1.21.3
     profiles: [observability]
     command:
       - run
