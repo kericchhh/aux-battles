@@ -7,3 +7,5 @@
 *.test
 coverage.out
 *.log
+web/node_modules
+web/dist

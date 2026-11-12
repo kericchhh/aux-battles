@@ -3,18 +3,22 @@ import { AlertDialog as Primitive } from 'radix-ui'
 
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { ModalSurface } from './modal-surface'
 
 export const AlertDialog = Primitive.Root
 export const AlertDialogTrigger = Primitive.Trigger
 
 export function AlertDialogContent({
   className,
+  children,
   ...props
 }: ComponentProps<typeof Primitive.Content>) {
   return (
     <Primitive.Portal>
       <Primitive.Overlay className="dialog-overlay" />
-      <Primitive.Content className={cn('dialog', className)} {...props} />
+      <Primitive.Content asChild {...props}>
+        <ModalSurface className={className}>{children}</ModalSurface>
+      </Primitive.Content>
     </Primitive.Portal>
   )
 }

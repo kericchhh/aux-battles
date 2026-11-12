@@ -15,7 +15,7 @@ export function Field({ label, error, hint, ...props }: FieldProps) {
   const errorId = error ? `${id}-error` : undefined
 
   return (
-    <div className="grid gap-2">
+    <div className="grid content-start gap-2">
       <Label htmlFor={id}>{label}</Label>
       <Input
         id={id}

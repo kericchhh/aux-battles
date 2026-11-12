@@ -11,20 +11,19 @@
   --color-paper: #fafafa;
   --color-dim: #a1a1aa;
   --color-accent: #2563eb;
-  --color-accent-hover: #1d4ed8;
   --color-accent-text: #7aa7ff;
   --color-ring: #3b82f6;
+  --color-on-accent: #ffffff;
+  --color-overlay: rgb(0 0 0 / 0.7);
   --color-alarm: #f87171;
 
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 10px;
 
-  --shadow-card:
-    inset 0 1px 0 rgb(255 255 255 / 0.04), 0 1px 2px rgb(0 0 0 / 0.4),
-    0 8px 24px -12px rgb(0 0 0 / 0.6);
+  --shadow-card: inset 0 0 0 1px rgb(255 255 255 / 0.06), 0 1px 2px rgb(0 0 0 / 0.5);
   --shadow-pop:
-    inset 0 1px 0 rgb(255 255 255 / 0.06), 0 2px 4px rgb(0 0 0 / 0.4),
+    inset 0 0 0 1px rgb(255 255 255 / 0.08), 0 2px 4px rgb(0 0 0 / 0.4),
     0 24px 48px -16px rgb(0 0 0 / 0.8);
 
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
@@ -35,6 +34,15 @@
     from {
       opacity: 0;
       translate: 0 4px;
+    }
+  }
+
+  @keyframes level {
+    from {
+      scale: 1 0.25;
+    }
+    to {
+      scale: 1 1;
     }
   }
 }

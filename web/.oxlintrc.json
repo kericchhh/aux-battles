@@ -16,7 +16,8 @@
     ],
     "react/react-in-jsx-scope": "off",
     "import/no-unassigned-import": "off",
-    "jsx-a11y/prefer-tag-over-role": "off"
+    "jsx-a11y/prefer-tag-over-role": "off",
+    "jsx-a11y/media-has-caption": "off"
   },
   "ignorePatterns": ["dist"],
   "overrides": [

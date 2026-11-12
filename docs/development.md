@@ -39,6 +39,27 @@ Both processes store media in `./storage` by default; set the same
 [worker guide](worker.md) for how songs are processed and how long each
 attempt may take, and the [API guide](api.md) for routes and examples.
 
+## Run the web client
+
+The client in `web/` uses Vite, React and pnpm. With the API on port 8080:
+
+```sh
+cd web
+pnpm install
+pnpm dev
+```
+
+Vite serves the client on `http://localhost:5173` and proxies `/api` to
+`http://localhost:8080`; set `API_URL` to use another address. Run
+`pnpm typecheck`, `pnpm lint`, `pnpm format:check`, `pnpm test` and
+`pnpm build` before pushing; CI runs the same checks.
+
+In Compose, the `web` service builds the client with `Dockerfile.web` and serves
+it with nginx on `127.0.0.1:8000`. nginx forwards `/api/` to the API without
+buffering, so live battle updates stream through, and does not expose
+`/api/metrics`. Because the API sees nginx as the client, login and registration
+rate limits are shared by everyone using the Compose client.
+
 ## API settings
 
 When serving over HTTPS, set `APP_ENV=production` to issue Secure session

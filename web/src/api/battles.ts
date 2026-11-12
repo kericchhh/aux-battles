@@ -4,6 +4,30 @@ import { api } from './client'
 
 export type BattleStatus = 'PENDING' | 'SELECTING' | 'ONGOING' | 'FINISHED' | 'CANCELLED'
 export type Stage = 'DRUM' | 'BASS' | 'MELODY' | 'FULL'
+export type Outcome = 'WIN' | 'LOSS' | 'DRAW'
+export type EndReason = 'COMPLETED' | 'FORFEIT' | 'TIMEOUT'
+export type Player = { username: string }
+export type SongInfo = { title: string; artist: string }
+
+export type RoundView = {
+  id: string
+  number: number
+  status: 'WAITING' | 'GUESSING' | 'FINISHED'
+  myStage: Stage
+  myPoints: number
+  myFinished: boolean
+  opponentFinished: boolean
+  myAttempts: number
+  stageEndsAt: string | null
+}
+
+export type CompletedRound = {
+  number: number
+  myPoints: number
+  opponentPoints: number
+  mySong: SongInfo
+  opponentSong: SongInfo
+}
 
 export type Battle = {
   id: string
@@ -11,24 +35,42 @@ export type Battle = {
   inviteCode: string
   currentRound: number
   rounds: number
+  guessSeconds: number | null
+  me: Player
+  opponent: Player | null
   opponentJoined: boolean
   myLineupLocked: boolean
   opponentLineupLocked: boolean
-  outcome: 'WIN' | 'LOSS' | 'DRAW' | null
-  endReason: 'COMPLETED' | 'FORFEIT' | 'TIMEOUT' | null
+  outcome: Outcome | null
+  endReason: EndReason | null
   myScore: number
   opponentScore: number
-  round: {
-    id: string
-    number: number
-    status: 'WAITING' | 'GUESSING' | 'FINISHED'
-    myStage: Stage
-    myPoints: number
-    myFinished: boolean
-    opponentFinished: boolean
-    myAttempts: number
-  } | null
-  previousRound: { number: number; myPoints: number; opponentPoints: number } | null
+  round: RoundView | null
+  completedRounds: CompletedRound[]
+  serverTime: string
+}
+
+export type BattleSummary = {
+  id: string
+  status: BattleStatus
+  rounds: number
+  currentRound: number
+  opponent: Player | null
+  inviteCode: string | null
+  myScore: number
+  opponentScore: number
+  outcome: Outcome | null
+  endReason: EndReason | null
+  lastActivityAt: string
+}
+
+export type Stats = {
+  played: number
+  wins: number
+  losses: number
+  draws: number
+  bestScore: number
+  averageScore: number
 }
 
 export type GuessResult = {
@@ -36,7 +78,7 @@ export type GuessResult = {
   roundId: string
   attempt: number
   correct: boolean
-  result: 'CORRECT' | 'INCORRECT'
+  result: 'CORRECT' | 'INCORRECT' | 'TIMED_OUT'
   basePoints: number
   streakBonus: number
   pointsAwarded: number
@@ -47,24 +89,35 @@ export type GuessResult = {
 }
 
 export const maxRounds = 7
+export const timerOptions = [null, 30, 15] as const
+export type GuessSeconds = (typeof timerOptions)[number]
 
 export const isActive = (status: BattleStatus) =>
   status === 'PENDING' || status === 'SELECTING' || status === 'ONGOING'
 
+export const battleKey = (id: string) => ['battles', id] as const
+
 export const battleQuery = (id: string) =>
   queryOptions({
-    queryKey: ['battles', id],
+    queryKey: battleKey(id),
     queryFn: () => api<Battle>(`/battles/${encodeURIComponent(id)}`),
-    refetchInterval: (query) => {
-      const battle = query.state.data
-      return battle && !isActive(battle.status) ? false : 2000
-    },
   })
 
-export const createBattle = (rounds: number) =>
+export const battlesQuery = queryOptions({
+  queryKey: ['battles'],
+  queryFn: () => api<BattleSummary[]>('/battles'),
+  refetchInterval: 15_000,
+})
+
+export const statsQuery = queryOptions({
+  queryKey: ['stats'],
+  queryFn: () => api<Stats>('/users/me/stats'),
+})
+
+export const createBattle = (body: { rounds: number; guessSeconds: GuessSeconds }) =>
   api<{ id: string; inviteCode: string }>('/battles', {
     method: 'POST',
-    body: JSON.stringify({ rounds }),
+    body: JSON.stringify(body),
   })
 
 export const joinBattle = (inviteCode: string) =>
@@ -82,11 +135,20 @@ export const lockLineup = (battleId: string, songIds: string[]) =>
 export const forfeitBattle = (battleId: string) =>
   api<Battle>(`/battles/${encodeURIComponent(battleId)}/forfeit`, { method: 'POST' })
 
+export const guessKey = (roundId: string) => ['rounds', roundId, 'guess'] as const
+
 export const submitGuess = (roundId: string, guess: string, expectedAttempt: number) =>
   api<GuessResult>(`/rounds/${encodeURIComponent(roundId)}/guess`, {
     method: 'POST',
     body: JSON.stringify({ guess, expectedAttempt }),
   })
 
+export const battleEventsUrl = (battleId: string) =>
+  `/api/battles/${encodeURIComponent(battleId)}/events`
+
 export const roundAudioUrl = (roundId: string, stage: Stage) =>
   `/api/rounds/${encodeURIComponent(roundId)}/audio?v=${stage}`
+
+export function opponentName(battle: { opponent: Player | null }, fallback = 'your opponent') {
+  return battle.opponent?.username ?? fallback
+}

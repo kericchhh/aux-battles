@@ -39,9 +39,30 @@ services:
       - "127.0.0.1:8080:8080"
     volumes:
       - "media:/data/media"
+    healthcheck:
+      test:
+        - CMD
+        - bash
+        - -c
+        - exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /healthz HTTP/1.0\r\n\r\n' >&3 && grep -q ' 200 ' <&3
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
     depends_on:
       migrate:
         condition: service_completed_successfully
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    image: aux-battles-web:dev
+    ports:
+      - "127.0.0.1:8000:80"
+    depends_on:
+      api:
+        condition: service_healthy
 
   worker:
     build:

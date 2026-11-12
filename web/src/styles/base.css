@@ -15,7 +15,7 @@
     @apply rounded-sm outline-2 outline-offset-2 outline-ring;
   }
   ::selection {
-    @apply bg-accent text-white;
+    @apply bg-accent text-on-accent;
   }
   input {
     caret-color: var(--color-ring);
@@ -26,6 +26,7 @@
   *,
   ::before,
   ::after {
+    transition: none !important;
     animation-duration: 1ms !important;
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;

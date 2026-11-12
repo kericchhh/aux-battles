@@ -1,4 +1,8 @@
-import { screen, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { createMemoryRouter, RouterProvider } from 'react-router'
+import { meQuery } from '@/api/auth'
+import { AdminOnly, GuestOnly } from './require-auth'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 import { axeViolations, json, mockFetch, renderRoute } from '@/test/render'
@@ -50,4 +54,63 @@ describe('SignIn', () => {
       password: 'correct-horse',
     })
   })
+})
+
+it('loads the canonical role and preserves a lazy protected return destination', async () => {
+  let authenticated = false
+  const user = { id: '1', username: 'admin', email: 'admin@test', role: 'ADMIN' }
+  mockFetch((url) => {
+    if (url.endsWith('/users/login')) {
+      authenticated = true
+      return json({ id: user.id, username: user.username, email: user.email })
+    }
+    return authenticated ? json(user) : json({ message: 'unauthorized' }, 401)
+  })
+  let loadUpload: (() => void) | undefined
+  const uploaded = new Promise<void>((resolve) => {
+    loadUpload = resolve
+  })
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const router = createMemoryRouter(
+    [
+      {
+        path: '/sign-in',
+        element: (
+          <GuestOnly>
+            <SignIn />
+          </GuestOnly>
+        ),
+      },
+      { path: '/', element: <h1>Wrong home destination</h1> },
+      {
+        path: '/upload',
+        lazy: async () => {
+          await uploaded
+          return {
+            Component: () => (
+              <AdminOnly>
+                <h1>Admin upload page</h1>
+              </AdminOnly>
+            ),
+          }
+        },
+      },
+    ],
+    { initialEntries: [{ pathname: '/sign-in', state: { from: '/upload' } }] },
+  )
+  render(
+    <QueryClientProvider client={client}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>,
+  )
+  await userEvent.type(await screen.findByLabelText('Username or email'), 'admin')
+  await userEvent.type(screen.getByLabelText('Password'), 'correct-horse')
+  await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+  await waitFor(() => expect(client.getQueryData(meQuery.queryKey)).toEqual(user))
+  await act(async () => {
+    loadUpload!()
+  })
+  expect(await screen.findByText('Admin upload page')).toBeInTheDocument()
+  expect(router.state.location.pathname).toBe('/upload')
+  client.clear()
 })

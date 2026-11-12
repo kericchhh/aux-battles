@@ -4,9 +4,9 @@ import axe from 'axe-core'
 import type { ReactNode } from 'react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 
-export function renderRoute(element: ReactNode, path = '/') {
+export function renderRoute(element: ReactNode, path = '/', pattern = '*') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  const router = createMemoryRouter([{ path: '*', element }], { initialEntries: [path] })
+  const router = createMemoryRouter([{ path: pattern, element }], { initialEntries: [path] })
   return {
     queryClient,
     router,
@@ -37,3 +37,13 @@ export function mockFetch(
 
 export const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+
+type Handler = (init?: RequestInit) => Response | Promise<Response>
+
+export function mockApi(routes: Record<string, Handler>) {
+  return mockFetch((url, init) => {
+    const path = url.replace(/^\/api/, '').split('?')[0]
+    const handler = routes[`${init?.method ?? 'GET'} ${path}`]
+    return handler ? handler(init) : json({ message: 'not found' }, 404)
+  })
+}

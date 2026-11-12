@@ -1,36 +1,52 @@
-import { createBrowserRouter } from 'react-router'
-
+import { createBrowserRouter, Outlet } from 'react-router'
+import { PageLoader } from '@/components/page-loader'
 import { ErrorPage } from '@/routes/error-page'
-import { Home } from '@/routes/home'
 import { NotFound } from '@/routes/not-found'
-import { Register } from '@/routes/register'
-import { GuestOnly, RequireAuth } from '@/routes/require-auth'
-import { SignIn } from '@/routes/sign-in'
+import { AdminOnly, GuestOnly, RequireAuth } from '@/routes/require-auth'
 
 export const router = createBrowserRouter([
   {
     errorElement: <ErrorPage />,
+    HydrateFallback: PageLoader,
     children: [
       {
-        path: '/sign-in',
         element: (
           <GuestOnly>
-            <SignIn />
+            <Outlet />
           </GuestOnly>
         ),
-      },
-      {
-        path: '/register',
-        element: (
-          <GuestOnly>
-            <Register />
-          </GuestOnly>
-        ),
+        children: [
+          {
+            path: '/sign-in',
+            lazy: async () => ({ Component: (await import('@/routes/sign-in')).SignIn }),
+          },
+          {
+            path: '/register',
+            lazy: async () => ({ Component: (await import('@/routes/register')).Register }),
+          },
+        ],
       },
       {
         element: <RequireAuth />,
         children: [
-          { index: true, element: <Home /> },
+          { index: true, lazy: async () => ({ Component: (await import('@/routes/home')).Home }) },
+          {
+            path: 'battles/:battleId',
+            lazy: async () => ({ Component: (await import('@/routes/battle')).BattlePage }),
+          },
+          {
+            element: (
+              <AdminOnly>
+                <Outlet />
+              </AdminOnly>
+            ),
+            children: [
+              {
+                path: 'upload',
+                lazy: async () => ({ Component: (await import('@/routes/upload')).Upload }),
+              },
+            ],
+          },
           { path: '*', element: <NotFound /> },
         ],
       },

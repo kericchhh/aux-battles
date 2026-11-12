@@ -1,10 +1,11 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { LogOut } from 'lucide-react'
-import { Outlet, useNavigate } from 'react-router'
+import { LogOut, Upload } from 'lucide-react'
+import { Link, Outlet, useNavigate } from 'react-router'
 import { toast } from 'sonner'
 
 import { signOut, type User } from '@/api/auth'
-import { Brand } from '@/components/brand'
+import { HowToPlay } from '@/components/game/how-to-play'
+import { Brand } from '@/components/layout/brand'
 import { Button } from '@/components/ui/button'
 
 export function AppShell({ user }: { user: User }) {
@@ -28,6 +29,16 @@ export function AppShell({ user }: { user: User }) {
         <div className="shell flex h-16 items-center gap-4">
           <Brand />
           <div className="ml-auto flex items-center gap-2">
+            {user.role === 'ADMIN' && (
+              <Button variant="ghost" asChild>
+                <Link to="/upload">
+                  <Upload aria-hidden />
+                  <span className="hidden sm:inline">Upload</span>
+                  <span className="sr-only sm:hidden">Upload a song</span>
+                </Link>
+              </Button>
+            )}
+            <HowToPlay />
             <span className="avatar" aria-hidden>
               {user.username.slice(0, 1)}
             </span>
