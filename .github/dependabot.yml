@@ -7,7 +7,7 @@ updates:
       interval: weekly
     open-pull-requests-limit: 3
     groups:
-      go-minor-and-patch:
+      go:
         patterns: ["*"]
         update-types: [minor, patch]
 
@@ -17,7 +17,7 @@ updates:
       interval: weekly
     open-pull-requests-limit: 3
     groups:
-      front-minor-and-patch:
+      frontend:
         patterns: ["*"]
         update-types: [minor, patch]
 
@@ -26,12 +26,20 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 3
+    groups:
+      actions:
+        patterns: ["*"]
+        update-types: [minor, patch]
 
   - package-ecosystem: docker
     directory: /
     schedule:
       interval: weekly
     open-pull-requests-limit: 3
+    groups:
+      docker-deps:
+        patterns: ["*"]
+        update-types: [minor, patch]
 
   - package-ecosystem: docker-compose
     directory: /
@@ -42,3 +50,7 @@ updates:
       - dependency-name: aux-battles-api
       - dependency-name: aux-battles-worker
       - dependency-name: aux-battles-web
+    groups:
+      compose-deps:
+        patterns: ["*"]
+        update-types: [minor, patch]
