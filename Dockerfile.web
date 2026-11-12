@@ -11,7 +11,7 @@ RUN pnpm install --frozen-lockfile
 COPY web ./
 RUN pnpm build
 
-FROM nginx:1.30.6-alpine
+FROM nginx:1.31.8-alpine
 
 RUN apk upgrade --no-cache
 
