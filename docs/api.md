@@ -21,9 +21,12 @@ at `GET /songs/{id}/status`; other users receive `403`. Accounts register as
 `USER`. To promote one, run:
 
 ```sh
-docker compose exec db psql -U aux -d aux_battles \
-  -c "UPDATE users SET role = 'ADMIN' WHERE lower(username) = lower('USERNAME')"
+echo "UPDATE users SET role = 'ADMIN' WHERE lower(username) = lower('USERNAME');" |
+  docker compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 ```
+
+The `sh -c` runs inside the database container, so `psql` uses the user and
+database that container was configured with from `.env`.
 
 The role is read on every request, so the change applies to existing sessions.
 

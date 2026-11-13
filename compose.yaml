@@ -1,16 +1,18 @@
+x-database-url: &database-url postgres://${POSTGRES_USER:?set POSTGRES_USER in .env}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:?set POSTGRES_DB in .env}?sslmode=disable
+
 services:
   db:
     image: postgres:18
     environment:
-      POSTGRES_USER: aux
-      POSTGRES_PASSWORD: aux_dev
-      POSTGRES_DB: aux_battles
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
     ports:
       - "127.0.0.1:5433:5432"
     volumes:
       - "pgdata:/var/lib/postgresql"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U aux -d aux_battles"]
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 2s
       timeout: 2s
       retries: 15
@@ -22,7 +24,7 @@ services:
     command: ["up"]
     environment:
       GOOSE_DRIVER: postgres
-      GOOSE_DBSTRING: postgres://aux:aux_dev@db:5432/aux_battles?sslmode=disable
+      GOOSE_DBSTRING: *database-url
       GOOSE_MIGRATION_DIR: /migrations
     depends_on:
       db:
@@ -32,7 +34,7 @@ services:
     build: .
     image: aux-battles-api:dev
     environment:
-      DATABASE_URL: postgres://aux:aux_dev@db:5432/aux_battles?sslmode=disable
+      DATABASE_URL: *database-url
       MEDIA_ROOT: /data/media
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     ports:
@@ -71,7 +73,7 @@ services:
     image: aux-battles-worker:dev
     init: true
     environment:
-      DATABASE_URL: postgres://aux:aux_dev@db:5432/aux_battles?sslmode=disable
+      DATABASE_URL: *database-url
       MEDIA_ROOT: /data/media
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       WORKER_ATTEMPT_TIMEOUT: ${WORKER_ATTEMPT_TIMEOUT:-30m}
@@ -93,6 +95,9 @@ services:
   grafana:
     image: grafana/grafana:13.3.0
     profiles: [observability]
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:?set GRAFANA_ADMIN_USER in .env}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
     ports:
       - "127.0.0.1:3000:3000"
     volumes:

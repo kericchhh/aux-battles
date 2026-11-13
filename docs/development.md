@@ -6,11 +6,13 @@ Run these commands from the repository root. The examples use a POSIX shell.
 
 Install the Go version listed in `go.mod`, Docker with Compose, FFmpeg, Python
 3.11, and
-[goose](https://github.com/pressly/goose) for database migrations. From the
-repository root:
+[goose](https://github.com/pressly/goose) for database migrations. The examples
+use the default credentials from `.env.example`; change them if your `.env`
+differs. From the repository root:
 
 ```sh
 go install github.com/pressly/goose/v3/cmd/goose@v3.30.1
+[ -f .env ] || cp .env.example .env
 docker compose up -d --wait db
 export DATABASE_URL='postgres://aux:aux_dev@127.0.0.1:5433/aux_battles?sslmode=disable'
 "$(go env GOPATH)/bin/goose" -dir db/migrations postgres "$DATABASE_URL" up

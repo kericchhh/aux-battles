@@ -26,7 +26,8 @@ https://github.com/user-attachments/assets/b1b42644-cd32-45ce-9514-35b44c18191c
 - **CI/CD:** every pull request runs Go and TypeScript checks, race-detector
   tests against migrated PostgreSQL databases, and image builds. Pushes to
   `main` publish images to GitHub Container Registry only after the Go, web
-  and image jobs pass ([ci.yml](.github/workflows/ci.yml)).
+  and image jobs pass, and version tags also publish versioned images and a
+  GitHub release ([ci.yml](.github/workflows/ci.yml)).
 - **Supply-chain security:** `govulncheck` for Go code, Trivy scans of every
   image that fail the build on fixable high and critical vulnerabilities,
   actions pinned to commit SHAs, least-privilege tokens, and grouped
@@ -73,12 +74,23 @@ pushes updates to both players over server-sent events.
 
 ## Run with Docker
 
-From the repository root:
+From the repository root, copy the example environment file and change the
+passwords in `.env`:
 
 ```sh
+cp .env.example .env
 docker compose up --build -d
 curl http://localhost:8080/healthz
 ```
+
+Compose reads database and Grafana credentials from `.env`, which Git ignores;
+variables exported in your shell take precedence over it. Use only letters and
+digits in `POSTGRES_PASSWORD`, because it is inserted into a connection URL.
+Postgres and Grafana apply the credentials only when their volumes are first
+created. If you already have a `pgdata` volume, keep the values it was created
+with, or migrations will fail to connect; to change them, run `ALTER ROLE` in
+Postgres first, or recreate the volume with `docker compose down -v`, which
+deletes its data.
 
 Compose starts PostgreSQL, applies migrations, and starts the API, a separate
 song worker and the web client. Open the game at `http://localhost:8000`; the
@@ -117,10 +129,11 @@ changes.
 
 ## CI
 
-Pushes and pull requests to `main`, and manual runs from the Actions tab, run
-the `go`, `web`, `images` and `observability` jobs; pushes to `main` also run
-`publish`. A newer push to a pull request cancels its older run. Runs on `main`
-queue instead, and only the latest queued push is kept.
+Pushes and pull requests to `main`, pushed `v*.*.*` tags, and manual runs from
+the Actions tab run the `go`, `web`, `images` and `observability` jobs; pushes
+to `main` and tags also run `publish`, and tags then run `release`. A newer
+push to a pull request cancels its older run. Runs on `main` queue instead,
+and only the latest queued push is kept.
 
 | Job | What it checks |
 | --- | --- |
@@ -128,10 +141,22 @@ queue instead, and only the latest queued push is kept.
 | `web` | Typecheck, lint, formatting, tests and production build of the client in `web/` |
 | `images` | Builds the API, worker and web images and scans each with Trivy, failing on fixable high or critical vulnerabilities |
 | `observability` | Compose configuration, Grafana dashboard JSON syntax, and Prometheus, Loki and Alloy configuration |
-| `publish` | Pushes to `main` only, after `go`, `web` and `images` pass: rebuilds the three images from the build cache and pushes them to GitHub Container Registry |
+| `publish` | Pushes to `main` and version tags, after `go`, `web` and `images` pass: rebuilds the three images from the build cache and pushes them to GitHub Container Registry |
+| `release` | Version tags only, after `publish` succeeds: creates a GitHub release with generated notes, marked as a pre-release when the tag has a suffix such as `-rc.1` |
 
 Published images are `ghcr.io/kericchhh/aux-battles-api`, `aux-battles-worker`
-and `aux-battles-web`, tagged with the short commit SHA (`sha-<commit>`) and
-`latest`. Only `publish` can write packages; every other job has read-only
-access. The observability checks validate configuration files; they do not
-start the monitoring stack or test dashboard queries against live metrics.
+and `aux-battles-web`. Every published image is tagged with the short commit
+SHA (`sha-<commit>`). A tag such as `v1.2.3` also adds `1.2.3` and `1.2`, and
+moves `latest`, so `latest` is the most recently pushed stable release. A pre-release
+tag such as `v1.3.0-rc.1` adds only `1.3.0-rc.1`. Only `publish` can write
+packages and only `release` can write repository contents; every other job has
+read-only access. The observability checks validate configuration files; they
+do not start the monitoring stack or test dashboard queries against live
+metrics.
+
+To cut a release, tag a commit on `main` and push the tag:
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```

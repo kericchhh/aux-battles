@@ -7,7 +7,8 @@ Prometheus for the dashboard and alerts, and Loki for log searches.
 
 ## Start and verify
 
-From the repository root:
+From the repository root, after creating `.env` as described in the
+[README](../README.md#run-with-docker):
 
 ```sh
 docker compose --profile observability up --build -d
@@ -15,8 +16,9 @@ docker compose --profile observability up --build -d
 
 Open [Prometheus targets](http://localhost:9090/targets) and check that `api`,
 `worker`, and `prometheus` are up. Open [Grafana](http://localhost:3000). On a
-fresh Grafana volume, sign in with `admin` / `admin`; an existing volume keeps
-its configured credentials. Grafana provisions the Prometheus and Loki data
+fresh Grafana volume, sign in with `GRAFANA_ADMIN_USER` and
+`GRAFANA_ADMIN_PASSWORD` from `.env`; an existing volume keeps its configured
+credentials. Grafana provisions the Prometheus and Loki data
 sources, the **API and Worker Overview** dashboard, and the **Worker
 Unavailable**, **Worker Loop Unhealthy**, and **Song Queue Waiting Too Long**
 alerts.
