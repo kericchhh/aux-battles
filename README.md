@@ -10,6 +10,13 @@ stack around them.
 
 ![A wrong guess unlocks the bass stem, then the right title scores 75 points](docs/images/guess.gif)
 
+Full 40-second walkthrough
+
+
+https://github.com/user-attachments/assets/b1b42644-cd32-45ce-9514-35b44c18191c
+
+
+
 ## What this project demonstrates
 
 - **Containers:** multi-stage images for the API, worker and web client; the
