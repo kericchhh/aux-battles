@@ -624,7 +624,7 @@
                       },
                       "spec": {
                         "editorMode": "code",
-                        "expr": "histogram_quantile(\n  0.95,\n  sum by (le, route) (\n    rate(aux_battles_http_request_duration_seconds_bucket[5m])\n  )\n)",
+                        "expr": "histogram_quantile(\n  0.95,\n  sum by (le, route) (\n    rate(aux_battles_http_request_duration_seconds_bucket{route!~\".*/events\"}[5m])\n  )\n)",
                         "legendFormat": "{{route}}",
                         "range": true
                       }

@@ -2,15 +2,67 @@
 
 [![CI](https://github.com/kericchhh/aux-battles/actions/workflows/ci.yml/badge.svg)](https://github.com/kericchhh/aux-battles/actions/workflows/ci.yml)
 
-A song guessing game, under development: a Go backend and a React web client.
-The backend accepts MP3 uploads, queues processing jobs, and serves a short clip
-and four separated stems.
+A two-player song guessing game. Each round you hear your opponent's song one
+stem at a time, drums first, then bass, melody and the full mix, and earlier
+correct guesses score more. A Go API and worker, a React client and PostgreSQL
+run together in Docker Compose, with a CI/CD pipeline and an observability
+stack around them.
 
-The API and worker use PostgreSQL for song state and job coordination. The worker
-uses FFmpeg and Demucs to prepare audio. Docker Compose runs the services locally;
-an optional observability stack collects metrics and logs with Prometheus,
-Grafana, Loki, and Alloy. GitHub Actions defines build, test, and configuration
-checks.
+![A wrong guess unlocks the bass stem, then the right title scores 75 points](docs/images/guess.gif)
+
+## What this project demonstrates
+
+- **Containers:** multi-stage images for the API, worker and web client; the
+  API and worker run as a non-root user; Compose starts services in order
+  behind health checks and runs migrations as a one-shot job
+  ([compose.yaml](compose.yaml)).
+- **CI/CD:** every pull request runs Go and TypeScript checks, race-detector
+  tests against migrated PostgreSQL databases, and image builds. Pushes to
+  `main` publish images to GitHub Container Registry only after the Go, web
+  and image jobs pass ([ci.yml](.github/workflows/ci.yml)).
+- **Supply-chain security:** `govulncheck` for Go code, Trivy scans of every
+  image that fail the build on fixable high and critical vulnerabilities,
+  actions pinned to commit SHAs, least-privilege tokens, and grouped
+  Dependabot updates across five ecosystems
+  ([dependabot.yml](.github/dependabot.yml)).
+- **Observability:** Prometheus metrics from both services, JSON logs shipped to
+  Loki by Alloy, and a provisioned Grafana dashboard and alerts
+  ([observability guide](docs/observability.md)).
+- **Operations:** runbooks for each worker alert, including failure and
+  recovery drills ([runbooks](docs/runbooks)).
+
+## Architecture
+
+```mermaid
+flowchart LR
+    browser[Browser] --> web["web<br/>nginx + React"]
+    web -- "/api" --> api["api<br/>Go"]
+    api --> db[(PostgreSQL)]
+    worker["worker<br/>Go, FFmpeg, Demucs"] --> db
+    api --- media[(media volume)]
+    worker --- media
+    db -. "NOTIFY" .-> api
+    api -. "live updates (SSE)" .-> web
+    web -. "live updates (SSE)" .-> browser
+
+    subgraph observability [Observability profile]
+        prometheus[Prometheus] --> grafana[Grafana]
+        loki[Loki] --> grafana
+        alloy[Alloy] --> loki
+    end
+    prometheus -. scrape .-> api
+    prometheus -. scrape .-> worker
+    alloy -. "container logs" .-> api
+    alloy -. "container logs" .-> worker
+```
+
+An admin uploads an MP3 to the API, which stores it on the shared media volume,
+checks it with ffprobe and queues a job in PostgreSQL. The worker claims jobs with
+`FOR UPDATE SKIP LOCKED`, cuts a clip with FFmpeg and separates it into stems
+with Demucs. During a battle, PostgreSQL `NOTIFY` events reach the API, which
+pushes updates to both players over server-sent events.
+
+![Grafana dashboard with request rate, latency, errors and worker activity](docs/images/grafana-dashboard.png)
 
 ## Run with Docker
 
