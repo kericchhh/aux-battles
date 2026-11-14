@@ -8,4 +8,5 @@ coverage.out
 
 *.log
 /storage/
+/backups/
 /.venv-worker/

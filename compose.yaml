@@ -30,6 +30,39 @@ services:
       db:
         condition: service_healthy
 
+  backup:
+    image: postgres:18
+    profiles: [backup]
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      PGDATABASE: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+      BACKUP_OWNER: ${BACKUP_UID:-1000}:${BACKUP_GID:-1000}
+    volumes:
+      - media:/data/media:ro
+      - ./backups:/backups
+    entrypoint: ["sh", "-euc"]
+    command:
+      - |
+        umask 077
+        name=$$(date -u +%Y%m%dT%H%M%SZ)
+        tmp=/backups/.$$name.partial
+        trap 'chown "$$BACKUP_OWNER" /backups; chown -R "$$BACKUP_OWNER" "$$tmp" "/backups/$$name" 2>/dev/null || true' EXIT
+        trap 'exit 130' INT TERM
+        mkdir "$$tmp"
+        pg_dump --format=custom --file="$$tmp/db.dump"
+        set --
+        for dir in songs incoming; do
+          if [ -d "/data/media/$$dir" ]; then set -- "$$@" "$$dir"; fi
+        done
+        tar -czf "$$tmp/media.tar.gz" -C /data/media --files-from=/dev/null "$$@"
+        mv "$$tmp" "/backups/$$name"
+        echo "backup written to backups/$$name"
+    depends_on:
+      db:
+        condition: service_healthy
+
   api:
     build: .
     image: aux-battles-api:dev

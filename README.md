@@ -37,7 +37,8 @@ https://github.com/user-attachments/assets/b1b42644-cd32-45ce-9514-35b44c18191c
   Loki by Alloy, and a provisioned Grafana dashboard and alerts
   ([observability guide](docs/observability.md)).
 - **Operations:** runbooks for each worker alert, including failure and
-  recovery drills ([runbooks](docs/runbooks)).
+  recovery drills, and a one-shot backup job for the database and media with
+  a tested restore drill ([runbooks](docs/runbooks)).
 
 ## Architecture
 
@@ -116,6 +117,22 @@ Open [Grafana](http://localhost:3000) for dashboards and logs, or check
 retention, and local access details.
 The [worker queue runbook](docs/runbooks/song-queue-unhealthy.md) includes a
 local database outage drill.
+
+## Back up and restore
+
+Back up the database and song files into `backups/<timestamp>/`, with the
+services that write to them stopped:
+
+```sh
+mkdir -p backups
+docker compose stop web api worker
+docker compose --profile backup run --rm backup
+docker compose start web api worker
+```
+
+The [backup and restore runbook](docs/runbooks/backup-restore.md) explains
+what the job saves, a restore drill into a separate Compose project that
+leaves the running stack untouched, and how to restore the normal stack.
 
 ## Development and tests
 
