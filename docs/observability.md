@@ -23,6 +23,44 @@ sources, the **API and Worker Overview** dashboard, and the **Worker
 Unavailable**, **Worker Loop Unhealthy**, and **Song Queue Waiting Too Long**
 alerts.
 
+## Telegram notifications
+
+Grafana sends firing and resolved alerts to a Telegram chat through the
+`telegram` contact point in
+`observability/grafana/provisioning/alerting/contact-points.yaml`. Each message
+lists the alert's `summary` and `runbook_url` annotations, so it links to the
+matching runbook. Alerts are grouped by folder and name, wait 30 seconds before
+the first message, and repeat every four hours while they keep firing.
+
+The file also provisions the notification policy, which replaces Grafana's
+whole policy tree on every start and makes it and the contact point read-only
+in the UI. Change routing in the file, not in Grafana. Removing the file does
+not restore Grafana's default policy; that needs `resetPolicies` in a
+provisioning file.
+
+To set it up:
+
+1. In Telegram, send `/newbot` to **@BotFather** and copy the token it returns.
+   The token controls the bot, so keep it secret.
+2. Send any message to the new bot, then run the command below with the token
+   in place of `<token>`. Using `curl` keeps the token out of browser history.
+   The number in `"chat":{"id":...}` is the chat ID; group chat IDs are
+   negative.
+
+   ```sh
+   curl -s 'https://api.telegram.org/bot<token>/getUpdates'
+   ```
+
+3. Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in `.env` and recreate
+   Grafana with `docker compose --profile observability up -d grafana`.
+
+Both variables are optional. Without them, Compose uses placeholder values, the
+stack starts normally, and notifications fail. The token is passed to Grafana as
+an environment variable, so anyone who can run `docker inspect` on this machine
+can read it; the Grafana API and UI show it as redacted. To test, open **Alerting > Contact
+points** in Grafana and use **Test** on `telegram`, or run the drill in the
+[worker unavailable runbook](runbooks/worker-unavailable.md).
+
 Once the services have started, check Loki readiness and generate an API log
 entry:
 

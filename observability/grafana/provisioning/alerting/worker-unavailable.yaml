@@ -52,6 +52,9 @@ groups:
           noDataState: Alerting
           execErrState: Error
           for: 2m
+          annotations:
+              summary: Prometheus cannot scrape the song worker.
+              runbook_url: https://github.com/kericchhh/aux-battles/blob/main/docs/runbooks/worker-unavailable.md
           isPaused: false
         - uid: aux_worker_loop_unhealthy
           title: Worker Loop Unhealthy
@@ -100,6 +103,9 @@ groups:
           noDataState: OK
           execErrState: Error
           for: 2m
+          annotations:
+              summary: The song worker is running but its loop or queue sampling is failing.
+              runbook_url: https://github.com/kericchhh/aux-battles/blob/main/docs/runbooks/song-queue-unhealthy.md
           isPaused: false
         - uid: aux_song_queue_waiting
           title: Song Queue Waiting Too Long
@@ -148,4 +154,7 @@ groups:
           noDataState: OK
           execErrState: Error
           for: 5m
+          annotations:
+              summary: A song has waited over an hour to be processed.
+              runbook_url: https://github.com/kericchhh/aux-battles/blob/main/docs/runbooks/song-queue-unhealthy.md
           isPaused: false

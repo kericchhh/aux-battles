@@ -34,7 +34,8 @@ https://github.com/user-attachments/assets/b1b42644-cd32-45ce-9514-35b44c18191c
   Dependabot updates across five ecosystems
   ([dependabot.yml](.github/dependabot.yml)).
 - **Observability:** Prometheus metrics from both services, JSON logs shipped to
-  Loki by Alloy, and a provisioned Grafana dashboard and alerts
+  Loki by Alloy, and a provisioned Grafana dashboard and alerts that notify
+  a Telegram chat with a link to the matching runbook
   ([observability guide](docs/observability.md)).
 - **Operations:** runbooks for each worker alert, including failure and
   recovery drills, and a one-shot backup job for the database and media with

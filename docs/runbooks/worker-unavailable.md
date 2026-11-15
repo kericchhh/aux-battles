@@ -42,5 +42,7 @@ docker compose stop worker
 ```
 
 After the next scrape, `up` should be 0. The rule moves from **Pending** to
-**Alerting** after about two minutes. Restore the worker with
-`docker compose start worker`, then confirm `up=1` and **Normal**.
+**Alerting** after about two minutes, and a firing message with a link to this
+runbook arrives in Telegram about 30 seconds later. Restore the worker with
+`docker compose start worker`, then confirm `up=1`, **Normal**, and a resolved
+message in Telegram within about five minutes.
