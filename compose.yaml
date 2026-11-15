@@ -20,7 +20,7 @@ services:
 
   migrate:
     build: .
-    image: aux-battles-api:dev
+    image: ghcr.io/kericchhh/aux-battles-api:${AUX_VERSION:-dev}
     entrypoint: ["/usr/local/bin/goose"]
     command: ["up"]
     environment:
@@ -66,7 +66,7 @@ services:
 
   api:
     build: .
-    image: aux-battles-api:dev
+    image: ghcr.io/kericchhh/aux-battles-api:${AUX_VERSION:-dev}
     restart: unless-stopped
     environment:
       DATABASE_URL: *database-url
@@ -94,7 +94,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.web
-    image: aux-battles-web:dev
+    image: ghcr.io/kericchhh/aux-battles-web:${AUX_VERSION:-dev}
     restart: unless-stopped
     ports:
       - "127.0.0.1:8000:80"
@@ -106,7 +106,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.worker
-    image: aux-battles-worker:dev
+    image: ghcr.io/kericchhh/aux-battles-worker:${AUX_VERSION:-dev}
     restart: unless-stopped
     init: true
     environment:
