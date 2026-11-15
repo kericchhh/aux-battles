@@ -33,11 +33,12 @@ https://github.com/user-attachments/assets/b1b42644-cd32-45ce-9514-35b44c18191c
   actions pinned to commit SHAs, least-privilege tokens, and grouped
   Dependabot updates across five ecosystems
   ([dependabot.yml](.github/dependabot.yml)).
-- **Observability:** Prometheus metrics from both services, JSON logs shipped to
-  Loki by Alloy, and a provisioned Grafana dashboard and alerts that notify
-  a Telegram chat with a link to the matching runbook
+- **Observability:** Prometheus metrics from both services and from PostgreSQL
+  through `postgres_exporter` with a least-privilege `pg_monitor` role, JSON
+  logs shipped to Loki by Alloy, and a provisioned Grafana dashboard and alerts
+  that notify a Telegram chat with a link to the matching runbook
   ([observability guide](docs/observability.md)).
-- **Operations:** runbooks for each worker alert, including failure and
+- **Operations:** runbooks for each alert, including failure and
   recovery drills, and a one-shot backup job for the database and media with
   a tested restore drill ([runbooks](docs/runbooks)).
 
@@ -59,7 +60,10 @@ flowchart LR
         prometheus[Prometheus] --> grafana[Grafana]
         loki[Loki] --> grafana
         alloy[Alloy] --> loki
+        exporter[postgres-exporter]
     end
+    prometheus -. scrape .-> exporter
+    exporter -. "pg_monitor role" .-> db
     prometheus -. scrape .-> api
     prometheus -. scrape .-> worker
     alloy -. "container logs" .-> api
@@ -85,9 +89,10 @@ docker compose up --build -d
 curl http://localhost:8080/healthz
 ```
 
-Compose reads database and Grafana credentials from `.env`, which Git ignores;
-variables exported in your shell take precedence over it. Use only letters and
-digits in `POSTGRES_PASSWORD`, because it is inserted into a connection URL.
+Compose reads database, Grafana and alerting credentials from `.env`, which
+Git ignores; variables exported in your shell take precedence over it. When
+`.env.example` gains a variable, copy it into your own `.env`. Use only letters
+and digits in `POSTGRES_PASSWORD`, because it is inserted into a connection URL.
 Postgres and Grafana apply the credentials only when their volumes are first
 created. If you already have a `pgdata` volume, keep the values it was created
 with, or migrations will fail to connect; to change them, run `ALTER ROLE` in
@@ -106,7 +111,8 @@ song may take longer while Demucs downloads its model.
 
 ## Observe locally
 
-Start the API, worker, Prometheus, Grafana, Loki, and Alloy:
+Start the API, worker, Prometheus, Grafana, Loki, Alloy and the PostgreSQL
+exporter:
 
 ```sh
 docker compose --profile observability up --build -d

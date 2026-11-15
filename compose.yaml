@@ -116,6 +116,43 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  db-roles:
+    image: postgres:18
+    profiles: [observability]
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      PGDATABASE: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+      MONITOR_PASSWORD: ${POSTGRES_EXPORTER_PASSWORD:-}
+    entrypoint: ["sh", "-euc"]
+    command:
+      - |
+        if [ -z "$$MONITOR_PASSWORD" ]; then
+          echo "set POSTGRES_EXPORTER_PASSWORD in .env" >&2
+          exit 1
+        fi
+        psql -q -v ON_ERROR_STOP=1 -v monitor_password="$$MONITOR_PASSWORD" <<'SQL'
+        SET client_min_messages = warning;
+        SELECT 'CREATE ROLE aux_monitor' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'aux_monitor')\gexec
+        ALTER ROLE aux_monitor WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE CONNECTION LIMIT 3 PASSWORD :'monitor_password';
+        GRANT pg_monitor TO aux_monitor;
+        SQL
+    depends_on:
+      db:
+        condition: service_healthy
+
+  postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.17.1
+    profiles: [observability]
+    environment:
+      DATA_SOURCE_URI: db:5432/${POSTGRES_DB:?set POSTGRES_DB in .env}?sslmode=disable
+      DATA_SOURCE_USER: aux_monitor
+      DATA_SOURCE_PASS: ${POSTGRES_EXPORTER_PASSWORD:-}
+    depends_on:
+      db-roles:
+        condition: service_completed_successfully
+
   prometheus:
     image: prom/prometheus:v3.15.1
     profiles: [observability]

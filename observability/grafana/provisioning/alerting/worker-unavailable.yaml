@@ -158,3 +158,54 @@ groups:
               summary: A song has waited over an hour to be processed.
               runbook_url: https://github.com/kericchhh/aux-battles/blob/main/docs/runbooks/song-queue-unhealthy.md
           isPaused: false
+        - uid: aux_database_unavailable
+          title: Database Unavailable
+          condition: C
+          data:
+            - refId: A
+              relativeTimeRange:
+                from: 600
+                to: 0
+              datasourceUid: cg3af1x01q2gwf
+              model:
+                editorMode: code
+                expr: pg_up{job="postgres"}
+                instant: true
+                intervalMs: 1000
+                legendFormat: __auto
+                maxDataPoints: 43200
+                range: false
+                refId: A
+            - refId: C
+              queryType: expression
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 1
+                        type: lt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - C
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: A
+                intervalMs: 1000
+                maxDataPoints: 43200
+                refId: C
+                type: threshold
+          noDataState: Alerting
+          execErrState: Error
+          for: 1m
+          annotations:
+              summary: PostgreSQL is unreachable or postgres_exporter is not being scraped.
+              runbook_url: https://github.com/kericchhh/aux-battles/blob/main/docs/runbooks/database-unavailable.md
+          isPaused: false

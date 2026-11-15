@@ -1,8 +1,8 @@
 # Observability
 
-The Compose `observability` profile starts Prometheus, Grafana, Loki, and Alloy
-alongside the API and worker. Prometheus scrapes metrics from the Go processes.
-Alloy reads their JSON logs from Docker and sends them to Loki. Grafana queries
+The Compose `observability` profile starts Prometheus, Grafana, Loki, Alloy and
+`postgres-exporter` alongside the API and worker. Prometheus scrapes metrics
+from the Go processes and, through the exporter, from PostgreSQL. Alloy reads their JSON logs from Docker and sends them to Loki. Grafana queries
 Prometheus for the dashboard and alerts, and Loki for log searches.
 
 ## Start and verify
@@ -108,6 +108,33 @@ metric before interpreting an empty queue. Grafana alerts when either worker
 health signal stays at 0 for two minutes or the oldest ready job waits over an
 hour for five minutes. See the [song queue runbook](runbooks/song-queue-unhealthy.md)
 for diagnosis and recovery.
+
+## Database metrics
+
+`postgres-exporter` reads PostgreSQL statistics and Prometheus scrapes it at
+`postgres-exporter:9187/metrics` as the `postgres` job. The dashboard shows
+whether the database is reachable (`pg_up`), open connections
+(`pg_stat_database_numbackends`), database size (`pg_database_size_bytes`), and
+committed and rolled back transactions per second. **Database Unavailable**
+fires when `pg_up` stays at 0 for one minute or the exporter stops reporting;
+see the [database unavailable runbook](runbooks/database-unavailable.md).
+
+The exporter connects as `aux_monitor`, a role with PostgreSQL's built-in
+`pg_monitor` permissions and at most three connections. It can read server
+statistics and settings, including the text of running queries in
+`pg_stat_activity`, but not app tables such as `users` or `sessions`, and it
+cannot change data. The app sends values as query parameters, so query text
+shows placeholders rather than user data. The one-shot
+`db-roles` service creates the role and sets its password from
+`POSTGRES_EXPORTER_PASSWORD` in `.env` each time the observability profile
+starts, so it works on existing databases and picks up password changes. The
+role is not created in a migration because migrations are committed and would
+hold the password, and not in a PostgreSQL init script because those run only
+when the data volume is first created.
+
+`POSTGRES_EXPORTER_PASSWORD` is only needed for the observability profile. If
+it is unset, `db-roles` exits with an error, the exporter does not start, and
+**Database Unavailable** fires; the rest of the stack runs normally.
 
 ## Logs
 
