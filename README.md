@@ -15,6 +15,7 @@ Full 40-second walkthrough
 
 https://github.com/user-attachments/assets/b1b42644-cd32-45ce-9514-35b44c18191c
 
+Music in the demo is credited in [CREDITS.md](CREDITS.md).
 
 
 ## What this project demonstrates

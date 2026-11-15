@@ -62,7 +62,8 @@ points** in Grafana and use **Test** on `telegram`, or run the drill in the
 [worker unavailable runbook](runbooks/worker-unavailable.md).
 
 Once the services have started, check Loki readiness and generate an API log
-entry:
+entry. Loki can return `503` for about a minute after starting; retry until it
+prints `ready`:
 
 ```sh
 curl -fsS http://localhost:3100/ready

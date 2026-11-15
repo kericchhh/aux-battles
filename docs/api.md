@@ -37,9 +37,21 @@ audio and supports HTTP byte ranges.
 ## Battle lobbies
 
 Battle routes require a valid session cookie. Create an account at `POST /users`
-and log in at `POST /users/login` to obtain one. Use separate cookie jars for
-host and guest accounts. With those jars saved as `host.cookies` and
-`guest.cookies`, create and join a lobby:
+and log in at `POST /users/login` to obtain one:
+
+```sh
+curl -H 'Content-Type: application/json' \
+  -d '{"username":"host_player","email":"host@example.com","password":"at-least-8-chars"}' \
+  http://localhost:8080/users
+curl -c host.cookies -H 'Content-Type: application/json' \
+  -d '{"identifier":"host_player","password":"at-least-8-chars"}' \
+  http://localhost:8080/users/login
+```
+
+Usernames are 3 to 30 letters, digits or underscores and are stored in
+lowercase, and passwords have at least 8 characters. `identifier` accepts the username or the email
+address. Use separate cookie jars for host and guest accounts. With those jars
+saved as `host.cookies` and `guest.cookies`, create and join a lobby:
 
 ```sh
 curl -b host.cookies -H 'Content-Type: application/json' \

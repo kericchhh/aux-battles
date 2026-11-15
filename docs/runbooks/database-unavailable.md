@@ -36,17 +36,23 @@ cannot claim jobs, so **Worker Loop Unhealthy** usually fires too. The API's
 
 ## Recover
 
-Start the database after resolving the cause, then make sure the API and
-worker are running:
+Start the database after resolving the cause:
 
 ```sh
 docker compose up -d db
+```
+
+An API or worker that was already running reconnects on its own. One that
+starts during the outage, for example after a reboot, checks the database
+once at startup and exits if it is unreachable; its `restart: unless-stopped`
+policy makes Docker start it again until the database is back, so
+`docker compose ps -a api worker` may show it restarting. If either is still not running a minute after
+the database is healthy, for example because it was stopped by hand, start it:
+
+```sh
 docker compose up -d api worker
 ```
 
-Running processes reconnect on their own, but the API and worker check the
-database once at startup and exit if it is unreachable, and Compose does not
-restart them. The second command starts any that stopped during the outage.
 Confirm `pg_up` returns to 1, the rule returns to **Normal** and a resolved
 message arrives in Telegram. Check worker logs for errors and verify that songs
 queued during the outage are processed.
