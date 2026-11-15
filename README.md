@@ -110,6 +110,23 @@ once its health check passes. The API is also available directly on
 Demucs model cache share the `media` volume. The worker runs on CPU; the first
 song may take longer while Demucs downloads its model.
 
+## Run a release
+
+Each [release](https://github.com/kericchhh/aux-battles/releases) publishes the
+API, worker and web images to GitHub Container Registry, so a released version
+runs without building. Set `AUX_VERSION` to the release number without the
+leading `v`:
+
+```sh
+AUX_VERSION=0.1.0 docker compose pull migrate api web worker
+AUX_VERSION=0.1.0 docker compose up -d --no-build
+```
+
+`--no-build` makes Compose run the pulled images instead of building from your
+checkout. Without `AUX_VERSION`, Compose builds local images tagged `dev`,
+which are never published, so update the other images during development with
+`docker compose pull --ignore-buildable` rather than a plain `pull`.
+
 ## Observe locally
 
 Start the API, worker, Prometheus, Grafana, Loki, Alloy and the PostgreSQL
