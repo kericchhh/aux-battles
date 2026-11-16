@@ -1,0 +1,13 @@
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: aux-battles
+servers: 1
+agents: 0
+image: rancher/k3s:v1.37.2-k3s1
+ports:
+  - port: 8088:80
+    nodeFilters: [loadbalancer]
+kubeAPI:
+  hostPort: "6550"
+  hostIP: "127.0.0.1"
