@@ -127,6 +127,18 @@ checkout. Without `AUX_VERSION`, Compose builds local images tagged `dev`,
 which are never published, so update the other images during development with
 `docker compose pull --ignore-buildable` rather than a plain `pull`.
 
+## Deploy automatically
+
+A local production stack in a separate clone deploys each new release by
+itself. Every 5 minutes, a systemd user timer runs
+[`scripts/deploy.sh`](scripts/deploy.sh), which checks GitHub for a new
+release. When one appears, it pulls the images, backs up the database and
+media, starts the release and checks its health. If the health check fails, it
+rolls back to the previous release. Results go to the Telegram alert chat.
+GitHub never connects to the machine; it only publishes the release. The
+[deploy runbook](docs/runbooks/deploy.md) covers setup, release rules and
+recovery.
+
 ## Observe locally
 
 Start the API, worker, Prometheus, Grafana, Loki, Alloy and the PostgreSQL
