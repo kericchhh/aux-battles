@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  namespace: aux-battles
+  labels:
+    app.kubernetes.io/part-of: aux-battles
+    app.kubernetes.io/component: worker
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/part-of: aux-battles
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: aux-battles
+        app.kubernetes.io/component: worker
+    spec:
+      shareProcessNamespace: true
+      securityContext:
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+      volumes:
+        - name: media
+          persistentVolumeClaim:
+            claimName: media
+        - name: tmp
+          emptyDir: {}
+      containers:
+        - name: worker
+          image: ghcr.io/kericchhh/aux-battles-worker:0.3.0
+          ports:
+            - name: metrics
+              containerPort: 9091
+          volumeMounts:
+            - name: media
+              mountPath: /data/media
+            - name: tmp
+              mountPath: /tmp
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: db-app
+                  key: uri
+            - name: LOG_LEVEL
+              value: INFO
+            - name: WORKER_ATTEMPT_TIMEOUT
+              value: 30m
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              memory: 3Gi
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]

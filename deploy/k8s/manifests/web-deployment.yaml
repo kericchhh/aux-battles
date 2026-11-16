@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: aux-battles
+  labels:
+    app.kubernetes.io/part-of: aux-battles
+    app.kubernetes.io/component: web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/part-of: aux-battles
+      app.kubernetes.io/component: web
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: aux-battles
+        app.kubernetes.io/component: web
+    spec:
+      securityContext:
+        runAsUser: 101
+        runAsGroup: 101
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: nginx-conf
+          emptyDir: {}
+      containers:
+        - name: web
+          image: ghcr.io/kericchhh/aux-battles-web:0.3.0
+          ports:
+            - name: http
+              containerPort: 8080
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: nginx-conf
+              mountPath: /etc/nginx/conf.d
+          env:
+            - name: API_HOST
+              value: api.aux-battles.svc.cluster.local
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
