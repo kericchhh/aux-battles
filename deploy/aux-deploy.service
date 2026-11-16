@@ -1,0 +1,7 @@
+[Unit]
+Description=Deploy the latest aux-battles release
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/aux-deploy --if-running
+TimeoutStartSec=20min
