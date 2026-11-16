@@ -1,0 +1,22 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: db
+  namespace: aux-battles
+  labels:
+    app.kubernetes.io/part-of: aux-battles
+spec:
+  instances: 1
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.7-standard-trixie
+  storage:
+    size: 1Gi
+  bootstrap:
+    initdb: 
+      database: aux
+      owner: aux
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 100m
+    limits:
+      memory: 512Mi
