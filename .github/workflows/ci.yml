@@ -164,6 +164,78 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
 
+  chart:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v4.3.0
+      
+      - name: Install kubeconform
+        run: curl -fsSL https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz | sudo tar -xz -C /usr/local/bin kubeconform
+
+      - name: Lint
+        run: helm lint --strict deploy/k8s/chart/aux-battles
+
+      - name: Validate rendered chart
+        run: helm template aux deploy/k8s/chart/aux-battles -n aux-battles | kubeconform -strict -summary
+
+      - name: Validate cluster manifests
+        run: |
+          kubeconform -strict -summary \
+            -schema-location default \
+            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+            deploy/k8s/manifests/namespace.yaml deploy/k8s/manifests/postgres.yaml
+
+  k8s-smoke:
+    needs: chart
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v4.3.0
+
+      - name: Install k3d
+        run: |
+          curl -fsSL -o k3d https://github.com/k3d-io/k3d/releases/download/v5.8.3/k3d-linux-amd64
+          sudo install k3d /usr/local/bin/k3d
+
+      - name: Create cluster
+        run: k3d cluster create --config deploy/k8s/k3d.yaml --wait
+
+      - name: Install CloudNativePG
+        run: |
+          helm repo add cnpg https://cloudnative-pg.github.io/charts
+          helm install cnpg cnpg/cloudnative-pg --version 0.29.1 -n cnpg-system --create-namespace --wait
+
+      - name: Create database
+        run: |
+          kubectl apply -f deploy/k8s/manifests/namespace.yaml -f deploy/k8s/manifests/postgres.yaml
+          kubectl wait cluster/db -n aux-battles --for=condition=Ready --timeout=5m
+
+      - name: Install chart
+        run: helm install aux deploy/k8s/chart/aux-battles -n aux-battles --wait --timeout 10m
+
+      - name: Check health through ingress
+        run: curl -fsS --retry 10 --retry-delay 3 --retry-all-errors http://localhost:8088/api/healthz
+
+      - name: Show cluster state on failure
+        if: failure()
+        run: |
+          kubectl get pods -A
+          kubectl describe pods -n aux-battles
+          kubectl logs -n aux-battles --all-containers --prefix -l app.kubernetes.io/part-of=aux-battles --tail=100
+
   publish:
     needs: [go, web, images]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))

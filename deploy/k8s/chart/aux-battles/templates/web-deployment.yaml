@@ -2,12 +2,12 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: web
-  namespace: aux-battles
+  namespace: {{ .Release.Namespace }}
   labels:
-    app.kubernetes.io/part-of: aux-battles
+    {{- include "aux-battles.labels" . | nindent 4 }}
     app.kubernetes.io/component: web
 spec:
-  replicas: 1
+  replicas: {{ .Values.web.replicas }}
   selector:
     matchLabels:
       app.kubernetes.io/part-of: aux-battles
@@ -15,7 +15,7 @@ spec:
   template:
     metadata:
       labels:
-        app.kubernetes.io/part-of: aux-battles
+        {{- include "aux-battles.labels" . | nindent 8 }}
         app.kubernetes.io/component: web
     spec:
       securityContext:
@@ -28,7 +28,7 @@ spec:
           emptyDir: {}
       containers:
         - name: web
-          image: ghcr.io/kericchhh/aux-battles-web:0.3.0
+          image: {{ .Values.image.registry }}/aux-battles-web:{{ .Values.image.tag | default .Chart.AppVersion }}
           ports:
             - name: http
               containerPort: 8080
@@ -39,7 +39,7 @@ spec:
               mountPath: /etc/nginx/conf.d
           env:
             - name: API_HOST
-              value: api.aux-battles.svc.cluster.local
+              value: api.{{ .Release.Namespace }}.svc.cluster.local
           livenessProbe:
             httpGet:
               path: /
@@ -52,11 +52,7 @@ spec:
               port: http
             periodSeconds: 5
           resources:
-            requests:
-              cpu: 50m
-              memory: 32Mi
-            limits:
-              memory: 64Mi
+            {{- toYaml .Values.web.resources | nindent 12 }}
           securityContext:
             runAsNonRoot: true
             allowPrivilegeEscalation: false

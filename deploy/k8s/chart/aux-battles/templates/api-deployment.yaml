@@ -2,12 +2,12 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: api
-  namespace: aux-battles
+  namespace: {{ .Release.Namespace }}
   labels:
-    app.kubernetes.io/part-of: aux-battles
+    {{- include "aux-battles.labels" . | nindent 4 }}
     app.kubernetes.io/component: api
 spec:
-  replicas: 1
+  replicas: {{ .Values.api.replicas }}
   selector:
     matchLabels:
       app.kubernetes.io/part-of: aux-battles
@@ -15,7 +15,7 @@ spec:
   template:
     metadata:
       labels:
-        app.kubernetes.io/part-of: aux-battles
+        {{- include "aux-battles.labels" . | nindent 8 }}
         app.kubernetes.io/component: api
     spec:
       securityContext:
@@ -28,7 +28,7 @@ spec:
             claimName: media
       containers:
         - name: api
-          image: ghcr.io/kericchhh/aux-battles-api:0.3.0
+          image: {{ .Values.image.registry }}/aux-battles-api:{{ .Values.image.tag | default .Chart.AppVersion }}
           ports:
             - name: http
               containerPort: 8080
@@ -39,12 +39,12 @@ spec:
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
-                  name: db-app
-                  key: uri
+                  name: {{ .Values.db.secretName }}
+                  key: {{ .Values.db.secretKey }}
             - name: MEDIA_ROOT
               value: /data/media
             - name: LOG_LEVEL
-              value: INFO
+              value: {{ .Values.logLevel | quote }}
           livenessProbe:
             httpGet:
               path: /healthz
@@ -57,11 +57,7 @@ spec:
               port: http
             periodSeconds: 5
           resources:
-            requests:
-              cpu: 100m
-              memory: 128Mi
-            limits:
-              memory: 256Mi
+            {{- toYaml .Values.api.resources | nindent 12 }}
           securityContext:
             runAsNonRoot: true
             allowPrivilegeEscalation: false
