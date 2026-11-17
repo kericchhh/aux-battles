@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: aux-battles
+  namespace: argocd
+spec:
+  project: default
+  source: 
+    repoURL: https://github.com/kericchhh/aux-battles.git
+    targetRevision: main
+    path: deploy/k8s/chart/aux-battles
+    helm:
+      releaseName: aux
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: aux-battles
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
