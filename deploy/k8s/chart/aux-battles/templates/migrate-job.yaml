@@ -2,22 +2,25 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: migrate
-  namespace: aux-battles
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+  namespace: {{ .Release.Namespace }}
   labels:
-    app.kubernetes.io/part-of: aux-battles
+    {{- include "aux-battles.labels" . | nindent 4 }}
     app.kubernetes.io/component: migrate
 spec:
   backoffLimit: 3
   template:
     metadata:
       labels:
-        app.kubernetes.io/part-of: aux-battles
+        {{- include "aux-battles.labels" . | nindent 8 }}
         app.kubernetes.io/component: migrate
     spec:
       restartPolicy: Never
       containers:
         - name: migrate
-          image: ghcr.io/kericchhh/aux-battles-api:0.3.0
+          image: {{ .Values.image.registry }}/aux-battles-api:{{ .Values.image.tag | default .Chart.AppVersion }}
           command: ["/usr/local/bin/goose", "up"]
           env:
             - name: GOOSE_DRIVER
@@ -27,8 +30,8 @@ spec:
             - name: GOOSE_DBSTRING
               valueFrom:
                 secretKeyRef:
-                  name: db-app
-                  key: uri
+                  name: {{ .Values.db.secretName }}
+                  key: {{ .Values.db.secretKey }}
           resources:
             requests:
               cpu: 50m

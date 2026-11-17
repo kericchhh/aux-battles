@@ -2,9 +2,9 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: worker
-  namespace: aux-battles
+  namespace: {{ .Release.Namespace }}
   labels:
-    app.kubernetes.io/part-of: aux-battles
+    {{- include "aux-battles.labels" . | nindent 4 }}
     app.kubernetes.io/component: worker
 spec:
   replicas: 1
@@ -17,7 +17,7 @@ spec:
   template:
     metadata:
       labels:
-        app.kubernetes.io/part-of: aux-battles
+        {{- include "aux-battles.labels" . | nindent 8 }}
         app.kubernetes.io/component: worker
     spec:
       shareProcessNamespace: true
@@ -33,7 +33,7 @@ spec:
           emptyDir: {}
       containers:
         - name: worker
-          image: ghcr.io/kericchhh/aux-battles-worker:0.3.0
+          image: {{ .Values.image.registry }}/aux-battles-worker:{{ .Values.image.tag | default .Chart.AppVersion }}
           ports:
             - name: metrics
               containerPort: 9091
@@ -46,12 +46,12 @@ spec:
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
-                  name: db-app
-                  key: uri
+                  name: {{ .Values.db.secretName }}
+                  key: {{ .Values.db.secretKey }}
             - name: LOG_LEVEL
-              value: INFO
+              value: {{ .Values.logLevel | quote }}
             - name: WORKER_ATTEMPT_TIMEOUT
-              value: 30m
+              value: {{ .Values.worker.attemptTimeout | quote }}
           livenessProbe:
             httpGet:
               path: /metrics
@@ -60,11 +60,7 @@ spec:
             timeoutSeconds: 5
             failureThreshold: 3
           resources:
-            requests:
-              cpu: 500m
-              memory: 1Gi
-            limits:
-              memory: 3Gi
+            {{- toYaml .Values.worker.resources | nindent 12 }}
           securityContext:
             runAsNonRoot: true
             allowPrivilegeEscalation: false

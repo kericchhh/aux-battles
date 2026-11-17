@@ -1,0 +1,43 @@
+image:
+  registry: ghcr.io/kericchhh
+  tag: ""
+
+logLevel: INFO
+
+db:
+  secretName: db-app
+  secretKey: uri
+
+api:
+  replicas: 1
+  resources: 
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+
+worker:
+  attemptTimeout: 30m
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1536Mi
+    limits:
+      memory: 3Gi
+
+web:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 32Mi
+    limits:
+      memory: 64Mi
+
+ingress:
+  enabled: true
+  className: traefik
+
+media:
+  size: 5Gi
