@@ -2,46 +2,31 @@
 
 [![CI](https://github.com/kericchhh/aux-battles/actions/workflows/ci.yml/badge.svg)](https://github.com/kericchhh/aux-battles/actions/workflows/ci.yml)
 
-A two-player song guessing game. Each round you hear your opponent's song one
-stem at a time, drums first, then bass, melody and the full mix, and earlier
-correct guesses score more. A Go API and worker, a React client and PostgreSQL
-run together in Docker Compose, with a CI/CD pipeline and an observability
-stack around them.
+A two-player song guessing game. You hear your opponent's song one stem at a
+time, drums first, then bass, melody and the full mix, and earlier correct
+guesses score more. A Go API and worker, a React client and PostgreSQL, run on
+Docker Compose or on Kubernetes with GitOps.
 
 ![A wrong guess unlocks the bass stem, then the right title scores 75 points](docs/images/guess.gif)
 
-Full 40-second walkthrough
+[Full 40-second walkthrough](https://github.com/user-attachments/assets/b1b42644-cd32-45ce-9514-35b44c18191c)
 
+## Highlights
 
-https://github.com/user-attachments/assets/b1b42644-cd32-45ce-9514-35b44c18191c
-
-Music in the demo is credited in [CREDITS.md](CREDITS.md).
-
-
-## What this project demonstrates
-
-- **Containers:** multi-stage images for the API, worker and web client; the
-  API and worker run as a non-root user; Compose starts services in order
-  behind health checks and runs migrations as a one-shot job
-  ([compose.yaml](compose.yaml)).
-- **CI/CD:** every pull request runs Go and TypeScript checks, race-detector
-  tests against migrated PostgreSQL databases, and image builds. Pushes to
-  `main` publish images to GitHub Container Registry only after the Go, web
-  and image jobs pass, and version tags also publish versioned images and a
-  GitHub release ([ci.yml](.github/workflows/ci.yml)).
-- **Supply-chain security:** `govulncheck` for Go code, Trivy scans of every
-  image that fail the build on fixable high and critical vulnerabilities,
-  actions pinned to commit SHAs, least-privilege tokens, and grouped
-  Dependabot updates across five ecosystems
-  ([dependabot.yml](.github/dependabot.yml)).
-- **Observability:** Prometheus metrics from both services and from PostgreSQL
-  through `postgres_exporter` with a least-privilege `pg_monitor` role, JSON
-  logs shipped to Loki by Alloy, and a provisioned Grafana dashboard and alerts
-  that notify a Telegram chat with a link to the matching runbook
-  ([observability guide](docs/observability.md)).
-- **Operations:** runbooks for each alert, including failure and
-  recovery drills, and a one-shot backup job for the database and media with
-  a tested restore drill ([runbooks](docs/runbooks)).
+- **Kubernetes:** a Helm chart with migrations as a pre-install and pre-upgrade
+  hook, PostgreSQL run by the CloudNativePG operator, and a local k3d cluster.
+- **GitOps:** Argo CD deploys everything from `main` through an app of apps,
+  with automatic sync, pruning and self-heal.
+- **Monitoring and alerting:** kube-prometheus-stack finds the app through
+  ServiceMonitors; community and app-specific alert rules reach Telegram
+  through Alertmanager.
+- **CI:** Go and TypeScript checks, tests against PostgreSQL, Trivy image
+  scans, Helm lint, kubeconform and a smoke install on a throwaway k3d cluster
+  for every pull request; pushes to `main` and version tags publish images to
+  GHCR, and tags create releases.
+- **Single-host deploys:** a systemd timer pulls new releases into a Compose
+  stack, with a backup before each deploy and rollback on failed health
+  checks.
 
 ## Architecture
 
@@ -53,164 +38,46 @@ flowchart LR
     worker["worker<br/>Go, FFmpeg, Demucs"] --> db
     api --- media[(media volume)]
     worker --- media
-    db -. "NOTIFY" .-> api
     api -. "live updates (SSE)" .-> web
-    web -. "live updates (SSE)" .-> browser
-
-    subgraph observability [Observability profile]
-        prometheus[Prometheus] --> grafana[Grafana]
-        loki[Loki] --> grafana
-        alloy[Alloy] --> loki
-        exporter[postgres-exporter]
-    end
-    prometheus -. scrape .-> exporter
-    exporter -. "pg_monitor role" .-> db
-    prometheus -. scrape .-> api
+    prometheus[Prometheus] -. scrape .-> api
     prometheus -. scrape .-> worker
-    alloy -. "container logs" .-> api
-    alloy -. "container logs" .-> worker
 ```
 
-An admin uploads an MP3 to the API, which stores it on the shared media volume,
-checks it with ffprobe and queues a job in PostgreSQL. The worker claims jobs with
-`FOR UPDATE SKIP LOCKED`, cuts a clip with FFmpeg and separates it into stems
-with Demucs. During a battle, PostgreSQL `NOTIFY` events reach the API, which
-pushes updates to both players over server-sent events.
+An admin uploads an MP3, which the API stores and queues in PostgreSQL. The
+worker claims jobs with `FOR UPDATE SKIP LOCKED`, cuts a clip with FFmpeg and
+separates it into stems with Demucs. During a battle, PostgreSQL `NOTIFY`
+events reach the API, which pushes updates to both players over server-sent
+events.
 
-![Grafana dashboard with request rate, latency, errors and worker activity](docs/images/grafana-dashboard.png)
-
-## Run with Docker
-
-From the repository root, copy the example environment file and change the
-passwords in `.env`:
+## Quick start
 
 ```sh
 cp .env.example .env
 docker compose up --build -d
-curl http://localhost:8080/healthz
 ```
 
-Compose reads database, Grafana and alerting credentials from `.env`, which
-Git ignores; variables exported in your shell take precedence over it. When
-`.env.example` gains a variable, copy it into your own `.env`. Use only letters
-and digits in `POSTGRES_PASSWORD`, because it is inserted into a connection URL.
-Postgres and Grafana apply the credentials only when their volumes are first
-created. If you already have a `pgdata` volume, keep the values it was created
-with, or migrations will fail to connect; to change them, run `ALTER ROLE` in
-Postgres first, or recreate the volume with `docker compose down -v`, which
-deletes its data.
-
-Compose starts PostgreSQL, applies migrations, and starts the API, a separate
-song worker and the web client. Open the game at `http://localhost:8000`; the
-web container serves the built client with nginx and forwards `/api` to the API
-once its health check passes. The API is also available directly on
-`http://localhost:8080`. Use
-`docker compose logs -f api worker` to view their JSON logs and
-`docker compose down` to stop them. Uploaded MP3s, processed clips, and the
-Demucs model cache share the `media` volume. The worker runs on CPU; the first
-song may take longer while Demucs downloads its model.
-
-## Run a release
-
-Each [release](https://github.com/kericchhh/aux-battles/releases) publishes the
-API, worker and web images to GitHub Container Registry, so a released version
-runs without building. Set `AUX_VERSION` to the release number without the
-leading `v`:
+Open the game at <http://localhost:8000>. The first song takes longer while
+Demucs downloads its model. To run a published release instead of building:
 
 ```sh
-AUX_VERSION=0.1.0 docker compose pull migrate api web worker
-AUX_VERSION=0.1.0 docker compose up -d --no-build
+AUX_VERSION=0.3.0 docker compose pull migrate api web worker
+AUX_VERSION=0.3.0 docker compose up -d --no-build
 ```
 
-`--no-build` makes Compose run the pulled images instead of building from your
-checkout. Without `AUX_VERSION`, Compose builds local images tagged `dev`,
-which are never published, so update the other images during development with
-`docker compose pull --ignore-buildable` rather than a plain `pull`.
+To run it on Kubernetes, see the [Kubernetes guide](docs/kubernetes.md).
 
-## Deploy automatically
+## Documentation
 
-A local production stack in a separate clone deploys each new release by
-itself. Every 5 minutes, a systemd user timer runs
-[`scripts/deploy.sh`](scripts/deploy.sh), which checks GitHub for a new
-release. When one appears, it pulls the images, backs up the database and
-media, starts the release and checks its health. If the health check fails, it
-rolls back to the previous release. Results go to the Telegram alert chat.
-GitHub never connects to the machine; it only publishes the release. The
-[deploy runbook](docs/runbooks/deploy.md) covers setup, release rules and
-recovery.
-
-## Observe locally
-
-Start the API, worker, Prometheus, Grafana, Loki, Alloy and the PostgreSQL
-exporter:
-
-```sh
-docker compose --profile observability up --build -d
-```
-
-Open [Grafana](http://localhost:3000) for dashboards and logs, or check
-[Prometheus targets](http://localhost:9090/targets). See the
-[observability guide](docs/observability.md) for queries, configuration,
-retention, and local access details.
-The [worker queue runbook](docs/runbooks/song-queue-unhealthy.md) includes a
-local database outage drill.
-
-## Back up and restore
-
-Back up the database and song files into `backups/<timestamp>/`, with the
-services that write to them stopped:
-
-```sh
-mkdir -p backups
-docker compose stop web api worker
-docker compose --profile backup run --rm backup
-docker compose start web api worker
-```
-
-The [backup and restore runbook](docs/runbooks/backup-restore.md) explains
-what the job saves, a restore drill into a separate Compose project that
-leaves the running stack untouched, and how to restore the normal stack.
-
-## Development and tests
-
-Run `go test ./...` for the Go tests that do not require PostgreSQL. See the
-[development guide](docs/development.md) for running the API and worker on your
-host and setting up the PostgreSQL integration tests. The
-[API guide](docs/api.md) covers routes and gameplay, the
-[worker guide](docs/worker.md) covers song processing, and the
-[migration notes](docs/migrations.md) cover applying and rolling back schema
-changes.
-
-## CI
-
-Pushes and pull requests to `main`, pushed `v*.*.*` tags, and manual runs from
-the Actions tab run the `go`, `web`, `images` and `observability` jobs; pushes
-to `main` and tags also run `publish`, and tags then run `release`. A newer
-push to a pull request cancels its older run. Runs on `main` queue instead,
-and only the latest queued push is kept.
-
-| Job | What it checks |
+| Guide | Covers |
 | --- | --- |
-| `go` | `gofmt`, `sqlc diff`, build, `go vet`, `govulncheck`, and the full test suite with the race detector against two migrated PostgreSQL test databases |
-| `web` | Typecheck, lint, formatting, tests and production build of the client in `web/` |
-| `images` | Builds the API, worker and web images and scans each with Trivy, failing on fixable high or critical vulnerabilities |
-| `observability` | Compose configuration, Grafana dashboard JSON syntax, and Prometheus, Loki and Alloy configuration |
-| `publish` | Pushes to `main` and version tags, after `go`, `web` and `images` pass: rebuilds the three images from the build cache and pushes them to GitHub Container Registry |
-| `release` | Version tags only, after `publish` succeeds: creates a GitHub release with generated notes, marked as a pre-release when the tag has a suffix such as `-rc.1` |
+| [Kubernetes](docs/kubernetes.md) | Cluster setup, Argo CD, monitoring, alerts and maintenance |
+| [Development](docs/development.md) | Running the API, worker and client on your host, and tests |
+| [API](docs/api.md) | Routes, game rules and examples |
+| [Song processing](docs/worker.md) | Jobs, retries and media handling |
+| [Migrations](docs/migrations.md) | Notes for applying and rolling back schema changes |
+| [Observability](docs/observability.md) | Prometheus, Grafana, Loki and Telegram alerts on Compose |
+| [Runbooks](docs/runbooks) | Deploys, backups and what to do when an alert fires |
 
-Published images are `ghcr.io/kericchhh/aux-battles-api`, `aux-battles-worker`
-and `aux-battles-web`. Every published image is tagged with the short commit
-SHA (`sha-<commit>`). A tag such as `v1.2.3` also adds `1.2.3` and `1.2`, and
-moves `latest`, so `latest` is the most recently pushed stable release. A pre-release
-tag such as `v1.3.0-rc.1` adds only `1.3.0-rc.1`. Only `publish` can write
-packages and only `release` can write repository contents; every other job has
-read-only access. The observability checks validate configuration files; they
-do not start the monitoring stack or test dashboard queries against live
-metrics.
+## License
 
-To cut a release, tag a commit on `main` and push the tag:
-
-```sh
-git tag v0.1.0
-git push origin v0.1.0
-```
+[MIT](LICENSE). Music in the demo is credited in [CREDITS.md](CREDITS.md).
