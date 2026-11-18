@@ -19,7 +19,7 @@ spec:
             summary: Song worker is down
             description: No worker in {{ .Release.Namespace }} has been reachable for 2 minutes, so uploaded songs are not being processed.
         - alert: SongProcessingFailing
-          expr: sum(increase(aux_battles_worker_attempts_total{namespace="{{ .Release.Namespace }}", outcome="failed"}[30m])) > 3
+          expr: sum by (namespace) (increase(aux_battles_worker_attempts_total{namespace="{{ .Release.Namespace }}", outcome="failed"}[30m])) > 3.5
           labels:
             severity: warning
           annotations:
