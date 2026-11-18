@@ -2,5 +2,5 @@ apiVersion: v2
 name: aux-battles
 description: Song battle app with an API, a song-processing worker and a web client
 type: application
-version: 0.1.1
+version: 0.1.2
 appVersion: "0.3.0"
