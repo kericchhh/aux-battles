@@ -194,7 +194,7 @@ jobs:
 
       - name: Validate rendered chart with ServiceMonitors
         run: |
-          helm template aux deploy/k8s/chart/aux-battles -n aux-battles --set serviceMonitor.enabled=true | kubeconform -strict -summary \
+          helm template aux deploy/k8s/chart/aux-battles -n aux-battles --set serviceMonitor.enabled=true --set prometheusRule.enabled=true | kubeconform -strict -summary \
             -schema-location default \
             -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
 
