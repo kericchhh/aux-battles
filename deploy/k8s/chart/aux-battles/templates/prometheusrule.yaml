@@ -1,0 +1,28 @@
+{{- if .Values.prometheusRule.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: aux-battles
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aux-battles.labels" . | nindent 4 }}
+spec:
+  groups:
+    - name: aux-battles
+      rules:
+        - alert: WorkerDown
+          expr: up{job="worker", namespace="{{ .Release.Namespace }}"} == 0 or absent(up{job="worker", namespace="{{ .Release.Namespace }}"})
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: Song worker is down
+            description: No worker in {{ .Release.Namespace }} has been reachable for 2 minutes, so uploaded songs are not being processed.
+        - alert: SongProcessingFailing
+          expr: sum by (namespace) (increase(aux_battles_worker_attempts_total{namespace="{{ .Release.Namespace }}", outcome="failed"}[30m])) > 3.5
+          labels:
+            severity: warning
+          annotations:
+            summary: Song processing is failing
+            description: More than 3 song processing attempts failed in {{ .Release.Namespace }} in the last 30 minutes, which is more than one bad upload.
+{{- end }}
