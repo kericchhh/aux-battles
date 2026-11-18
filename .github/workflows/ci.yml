@@ -192,6 +192,12 @@ jobs:
             -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
             deploy/k8s/manifests/namespace.yaml deploy/k8s/manifests/postgres.yaml
 
+      - name: Validate rendered chart with ServiceMonitors
+        run: |
+          helm template aux deploy/k8s/chart/aux-battles -n aux-battles --set serviceMonitor.enabled=true | kubeconform -strict -summary \
+            -schema-location default \
+            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
+
   k8s-smoke:
     needs: chart
     runs-on: ubuntu-latest

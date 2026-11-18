@@ -41,3 +41,6 @@ ingress:
 
 media:
   size: 5Gi
+
+serviceMonitor:
+  enabled: false
