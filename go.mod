@@ -4,7 +4,7 @@ go 1.27.4
 
 require (
 	github.com/alexedwards/argon2id v1.0.0
-	github.com/jackc/pgx/v5 v5.12.0
+	github.com/jackc/pgx/v5 v5.13.0
 	github.com/prometheus/client_golang v1.25.0
 	github.com/prometheus/client_model v0.6.3
 	golang.org/x/sync v0.25.0
