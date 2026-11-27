@@ -13,7 +13,7 @@ RUN CGO_ENABLED=0 go build -trimpath -o /out/api ./cmd/api
 
 FROM debian:bookworm-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates ffmpeg \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends ca-certificates ffmpeg \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /data/media/incoming \
     && chown -R 65532:65532 /data/media
