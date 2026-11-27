@@ -10,3 +10,7 @@ coverage.out
 /storage/
 /backups/
 /.venv-worker/
+
+/deploy/k8s/secrets/*
+!/deploy/k8s/secrets/*.yaml
+sealed-secrets-key*.yaml
